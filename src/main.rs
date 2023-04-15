@@ -105,7 +105,7 @@ impl Buffer {
 struct Params {
     pub num_tenants_n: usize,
     pub buffer_size_q: usize,
-    pub op_seq_size_m: usize,
+    // pub op_seq_size_m: usize,
     pub priorities_lt: Vec<u8>,
     pub db_size_dt: Vec<usize>,
     pub buffer_sizes_qt: Vec<(usize, usize, usize)>,
@@ -126,7 +126,7 @@ impl Params {
         let line = read_numbers(input.next());
         params.num_tenants_n = line[0];
         params.buffer_size_q = line[1];
-        params.op_seq_size_m = line[2];
+        // params.op_seq_size_m = line[2];
 
         params.priorities_lt = read_numbers(input.next())
             .into_iter()
