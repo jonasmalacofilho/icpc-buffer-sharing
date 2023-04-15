@@ -1,16 +1,19 @@
 //! Copyright 2023 Jonas Malaco.
 
 use std::collections::HashMap;
-use std::io::{self, Lines, StdinLock, Write};
+use std::io::{self, BufRead, Lines, Write};
 
 fn main() {
-    let mut input = io::stdin().lines();
-    let mut output = io::stdout().lock();
+    run(io::stdin().lock(), io::stdout().lock());
+}
 
-    let params = Params::from_stdin(&mut input);
+fn run(input: impl BufRead, mut output: impl Write) {
+    let mut input = input.lines();
+
+    let params = Params::from_lines(&mut input);
     let mut buffer = Buffer::with_params(params.clone());
 
-    while let Some(op) = Operation::from_stdin(&mut input) {
+    while let Some(op) = Operation::from_lines(&mut input) {
         debug_assert!((1..=params.num_tenants_n).contains(&(op.tenant.0 as usize)));
         debug_assert!((1..=params.db_size_dt[op.tenant.index()]).contains(&(op.page.0 as usize)));
 
@@ -109,7 +112,7 @@ struct Params {
 }
 
 impl Params {
-    fn from_stdin(input: &mut Lines<StdinLock>) -> Params {
+    fn from_lines(input: &mut Lines<impl BufRead>) -> Params {
         fn read_numbers(line: Option<Result<String, std::io::Error>>) -> Vec<usize> {
             line.unwrap()
                 .unwrap()
@@ -156,7 +159,7 @@ struct Operation {
 }
 
 impl Operation {
-    fn from_stdin(input: &mut Lines<StdinLock>) -> Option<Operation> {
+    fn from_lines(input: &mut Lines<impl BufRead>) -> Option<Operation> {
         input.next().map(|line| {
             let line = line.unwrap();
             let mut split = line.split_whitespace();
