@@ -35,6 +35,15 @@ struct Buffer {
 
 impl Buffer {
     fn with_params(params: Params) -> Self {
+        debug_assert!(
+            params
+                .buffer_sizes_qt
+                .iter()
+                .map(|(qmin, _, _)| qmin)
+                .sum::<usize>()
+                <= params.buffer_size_q
+        );
+
         Buffer {
             ledgers: vec![Default::default(); params.num_tenants_n],
             max_loc: 0,
@@ -54,7 +63,9 @@ impl Buffer {
         // Op already in the buffer, return its location.
         if let Some((used, loc)) = self.ledgers[op.tenant.index()].get_mut(&op.page) {
             *used = self.now;
-            return *loc;
+            let loc = *loc;
+            self.check_invariants();
+            return loc;
         }
 
         // Tenant at capacity, must swap with one of its own pages.
@@ -70,6 +81,7 @@ impl Buffer {
             );
             self.ledgers[op.tenant.index()].remove(&evicted);
             self.ledgers[op.tenant.index()].insert(op.page, (self.now, loc));
+            self.check_invariants();
             return loc;
         }
 
@@ -77,6 +89,7 @@ impl Buffer {
         if self.len() < self.params.buffer_size_q {
             self.max_loc += 1;
             self.ledgers[op.tenant.index()].insert(op.page, (self.now, self.max_loc));
+            self.check_invariants();
             return self.max_loc;
         }
 
@@ -96,9 +109,23 @@ impl Buffer {
             self.now
         );
         self.ledgers[tidx].remove(&evicted);
-        self.ledgers[tidx].insert(op.page, (self.now, loc));
+        self.ledgers[op.tenant.index()].insert(op.page, (self.now, loc));
+        self.check_invariants();
         loc
     }
+
+    #[cfg(debug_assertions)]
+    fn check_invariants(&self) {
+        assert!(self.len() <= self.params.buffer_size_q);
+        for (tidx, ledger) in self.ledgers.iter().enumerate() {
+            let (_, _, qmax) = self.params.buffer_sizes_qt[tidx];
+            assert!(ledger.len() <= qmax);
+            assert!(ledger.len() <= self.params.db_size_dt[tidx]);
+        }
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn check_invariants(&self) {}
 }
 
 #[derive(Debug, Clone, Default)]
