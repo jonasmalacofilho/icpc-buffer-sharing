@@ -63,7 +63,7 @@ fn buffer_and_tenant_bellow_capacity() {
 }
 
 #[test]
-fn tentant_bellow_qmin() {
+fn tenant_bellow_qmin() {
     let params = Params {
         num_tenants_n: 2,
         buffer_size_q: 4,

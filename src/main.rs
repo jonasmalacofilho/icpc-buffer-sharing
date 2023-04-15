@@ -48,8 +48,11 @@ impl Buffer {
         );
 
         Buffer {
-            // FIXME: don't allocate more memory than necessary.
-            ledgers: vec![vec![(0, None); 100_000]; params.num_tenants_n],
+            ledgers: params
+                .db_size_dt
+                .iter()
+                .map(|&n| vec![(0, None); n])
+                .collect(),
             ledger_sizes: vec![0; params.num_tenants_n],
             max_loc: 0,
             now: 0,
