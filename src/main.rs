@@ -186,3 +186,6 @@ impl Tenant {
 /// Page/object `Pi`, where `1 <= i <= M`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Page(u32);
+
+#[cfg(test)]
+mod tests;
