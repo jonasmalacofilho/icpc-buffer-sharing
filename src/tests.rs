@@ -1,6 +1,6 @@
 use super::*;
 
-fn op(ti: u8, pi: u32) -> Operation {
+fn op(ti: u8, pi: usize) -> Operation {
     Operation {
         tenant: Tenant(ti),
         page: Page(pi),
@@ -81,6 +81,9 @@ fn tentant_bellow_qmin() {
 
     assert_ne!(a, b);
 }
+
+#[test]
+fn foo() {}
 
 #[test]
 fn smoke() {

@@ -1,7 +1,7 @@
 //! Copyright 2023 Jonas Malaco.
 
-use std::collections::HashMap;
 use std::io::{self, BufRead, Lines, Write};
+use std::num::NonZeroUsize;
 
 fn main() {
     run(io::stdin().lock(), io::stdout().lock());
@@ -15,7 +15,7 @@ fn run(input: impl BufRead, mut output: impl Write) {
 
     while let Some(op) = Operation::from_lines(&mut input) {
         debug_assert!((1..=params.num_tenants_n).contains(&(op.tenant.0 as usize)));
-        debug_assert!((1..=params.db_size_dt[op.tenant.index()]).contains(&(op.page.0 as usize)));
+        debug_assert!((1..=params.db_size_dt[op.tenant.index()]).contains(&op.page.0));
 
         let loc = buffer.locate(op);
         debug_assert!((1..=params.buffer_size_q).contains(&loc));
@@ -27,7 +27,10 @@ fn run(input: impl BufRead, mut output: impl Write) {
 
 #[derive(Debug, Clone)]
 struct Buffer {
-    ledgers: Vec<HashMap<Page, (u64, usize)>>,
+    // Tenant -> Page -> (used, loc)
+    ledgers: Vec<Vec<(u64, Option<NonZeroUsize>)>>,
+    // Tenent -> pages in buffer
+    ledger_sizes: Vec<usize>,
     max_loc: usize,
     params: Params,
     now: u64,
@@ -45,7 +48,9 @@ impl Buffer {
         );
 
         Buffer {
-            ledgers: vec![Default::default(); params.num_tenants_n],
+            // FIXME: don't allocate more memory than necessary.
+            ledgers: vec![vec![(0, None); 100_000]; params.num_tenants_n],
+            ledger_sizes: vec![0; params.num_tenants_n],
             max_loc: 0,
             now: 0,
             params,
@@ -53,7 +58,6 @@ impl Buffer {
     }
 
     fn len(&self) -> usize {
-        debug_assert_eq!(self.max_loc, self.ledgers.iter().map(|x| x.len()).sum());
         self.max_loc
     }
 
@@ -61,67 +65,96 @@ impl Buffer {
         self.now += 1;
 
         // Op already in the buffer, return its location.
-        if let Some((used, loc)) = self.ledgers[op.tenant.index()].get_mut(&op.page) {
+        if let (used, Some(loc)) = &mut self.ledgers[op.tenant.index()][op.page.index()] {
             *used = self.now;
             let loc = *loc;
             self.check_invariants();
-            return loc;
+            return loc.into();
         }
 
-        // Tenant at capacity, must swap with one of its own pages.
-        if self.ledgers[op.tenant.index()].len() == self.params.buffer_sizes_qt[op.tenant.index()].2
+        // // Tenant at capacity, must swap with one of its own pages.
+        if self.ledger_sizes[op.tenant.index()] == self.params.buffer_sizes_qt[op.tenant.index()].2
         {
-            let (&evicted, &(evicted_used, loc)) = self.ledgers[op.tenant.index()]
+            let (evict_page, &(evict_used, loc)) = self.ledgers[op.tenant.index()]
                 .iter()
-                .min_by_key(|(_, (used, _))| used)
+                .enumerate()
+                .filter(|(_page, (_used, loc))| loc.is_some())
+                .min_by_key(|(_page, (used, _loc))| used)
                 .unwrap();
+            let loc = loc.unwrap();
             eprintln!(
-                "// replacing own {evicted:?}, last used {evicted_used} (now is {})",
+                "// replacing own {evict_page:?}, last used {evict_used} (now is {})",
                 self.now
             );
-            self.ledgers[op.tenant.index()].remove(&evicted);
-            self.ledgers[op.tenant.index()].insert(op.page, (self.now, loc));
+            self.ledgers[op.tenant.index()][evict_page].1 = None;
+            self.ledgers[op.tenant.index()][op.page.index()] = (self.now, Some(loc));
             self.check_invariants();
-            return loc;
+            return loc.into();
         }
 
         // Buffer and tenant not at capacity, insert op in empty space.
         if self.len() < self.params.buffer_size_q {
             self.max_loc += 1;
-            self.ledgers[op.tenant.index()].insert(op.page, (self.now, self.max_loc));
+            self.ledgers[op.tenant.index()][op.page.index()] =
+                (self.now, Some(NonZeroUsize::new(self.max_loc).unwrap()));
+            self.ledger_sizes[op.tenant.index()] += 1;
             self.check_invariants();
             return self.max_loc;
         }
 
-        // Contented, find the least worst page to swap with.
-        let (tidx, &evicted, &(evicted_used, loc)) = self
+        // // Contented, find the least worst page to swap with.
+        let (evict_tenant, evict_page, evict_used, loc) = self
             .ledgers
             .iter()
-            .zip(self.params.buffer_sizes_qt.iter())
+            .zip(&self.ledger_sizes)
+            .zip(self.params.buffer_sizes_qt.iter().map(|q| q.0))
             .enumerate()
-            // FIXME: can replace own page if at Qmin (but pages of other tenants only if they're
-            // *above* their Qmin).
-            .filter(|(_, (ledger, (qtmin, _, _)))| ledger.len() > *qtmin)
-            .flat_map(|(tidx, (ledger, _))| ledger.iter().map(move |(k, v)| (tidx, k, v)))
-            .min_by_key(|(_, _, (used, _))| used)
+            .filter(|(t, ((_ledger, qt), qmin))| {
+                *qt > qmin || (*t == op.tenant.index() && *qt == qmin)
+            })
+            .map(move |(t, ((ledger, _), _))| {
+                let (p, &(used, loc)) = ledger
+                    .iter()
+                    .enumerate()
+                    .filter(|(_page, (_used, loc))| loc.is_some())
+                    .min_by_key(|(_page, (used, _loc))| used)
+                    .unwrap();
+                (t, p, used, loc)
+            })
+            .min_by_key(|(_t, _p, used, _loc)| *used)
             .unwrap();
+        let loc = loc.unwrap();
         eprintln!(
-            "// replacing {tidx:?}'s {evicted:?}, last used {evicted_used} (now is {})",
+            "// replacing {evict_tenant:?}'s {evict_page:?}, last used {evict_used} (now is {})",
             self.now
         );
-        self.ledgers[tidx].remove(&evicted);
-        self.ledgers[op.tenant.index()].insert(op.page, (self.now, loc));
+        self.ledgers[evict_tenant][evict_page].1 = None;
+        self.ledger_sizes[evict_tenant] -= 1;
+        self.ledgers[op.tenant.index()][op.page.index()] = (self.now, Some(loc));
+        self.ledger_sizes[op.tenant.index()] += 1;
         self.check_invariants();
-        loc
+        loc.into()
     }
 
     #[cfg(debug_assertions)]
     fn check_invariants(&self) {
+        debug_assert_eq!(
+            self.len(),
+            self.ledgers
+                .iter()
+                .map(|x| x.iter().filter(|x| x.1.is_some()).count())
+                .sum()
+        );
+
         assert!(self.len() <= self.params.buffer_size_q);
-        for (tidx, ledger) in self.ledgers.iter().enumerate() {
-            let (_, _, qmax) = self.params.buffer_sizes_qt[tidx];
-            assert!(ledger.len() <= qmax);
-            assert!(ledger.len() <= self.params.db_size_dt[tidx]);
+
+        for (t, ledger) in self.ledgers.iter().enumerate() {
+            let qt = ledger.iter().filter(|x| x.1.is_some()).count();
+            assert_eq!(self.ledger_sizes[t], qt);
+
+            let (_, _, qmax) = self.params.buffer_sizes_qt[t];
+            assert!(qt <= qmax);
+            assert!(qt <= self.params.db_size_dt[t]);
         }
     }
 
@@ -213,7 +246,13 @@ impl Tenant {
 
 /// Page/object `Pi`, where `1 <= i <= M`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct Page(u32);
+struct Page(usize);
+
+impl Page {
+    fn index(&self) -> usize {
+        (self.0 - 1) as _
+    }
+}
 
 #[cfg(test)]
 mod tests;
