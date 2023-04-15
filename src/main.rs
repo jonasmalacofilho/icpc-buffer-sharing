@@ -82,6 +82,8 @@ impl Buffer {
             .ledgers
             .iter()
             .enumerate()
+            // FIXME: can replace own page if at Qmin (but pages of other tenants only if they're
+            // *above* their Qmin).
             .filter(|(tidx, ledger)| ledger.len() > self.params.buffer_sizes_qt[*tidx].0)
             .flat_map(|(tidx, ledger)| ledger.iter().map(move |(k, v)| (tidx, k, v)))
             .min_by_key(|(_, _, (used, _))| used)
