@@ -63,19 +63,19 @@ fn buffer_and_tenant_bellow_capacity() {
 }
 
 #[test]
-fn foo() {
+fn tentant_bellow_qmin() {
     let params = Params {
         num_tenants_n: 2,
         buffer_size_q: 4,
         priorities_lt: vec![1; 2],
         db_size_dt: vec![10; 2],
-        buffer_sizes_qt: vec![(1, 2, 3); 2],
+        buffer_sizes_qt: vec![(2, 2, 4); 2],
     };
     let mut buffer = Buffer::with_params(params);
+    let a = buffer.locate(op(1, 1));
     buffer.locate(op(2, 1));
     buffer.locate(op(2, 2));
     buffer.locate(op(2, 3));
-    let a = buffer.locate(op(1, 1));
     let b = buffer.locate(op(1, 2));
     assert_eq!(buffer.len(), 4);
 
