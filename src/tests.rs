@@ -12,18 +12,18 @@ fn page_hit() {
     let params = Params {
         num_tenants_n: 2,
         buffer_size_q: 10,
-        priorities_lt: vec![1, 2],
-        db_size_dt: vec![10, 10],
-        buffer_sizes_qt: vec![(1, 1, 1), (1, 1, 1)],
+        priorities_lt: vec![1; 2],
+        db_size_dt: vec![10; 2],
+        buffer_sizes_qt: vec![(1, 1, 1); 2],
     };
     let mut buffer = Buffer::with_params(params);
-
     let a = buffer.locate(op(1, 1));
     let b = buffer.locate(op(2, 10));
     assert_ne!(a, b);
 
     assert_eq!(buffer.locate(op(2, 10)), b);
     assert_eq!(buffer.locate(op(1, 1)), a);
+    assert_eq!(buffer.len(), 2);
 }
 
 #[test]
