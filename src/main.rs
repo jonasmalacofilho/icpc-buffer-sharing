@@ -133,8 +133,7 @@ impl Buffer {
 
         // Reinsert any entries at the front of the heaps with outdated `used` values.
         for (heap, map) in self.heaps.iter_mut().zip(&self.maps) {
-            loop {
-                let &HeapEntry(p, used) = heap.peek().unwrap();
+            while let Some(&HeapEntry(p, used)) = heap.peek() {
                 let &(last_used, _) = &map[&p];
                 if used == last_used {
                     break;
