@@ -27,10 +27,12 @@ fn run(input: impl BufRead, mut output: impl Write) {
     let (mut hits, mut misses, mut evictions) = (0, 0, 0);
     for (t, c) in buffer.counters.iter().enumerate() {
         eprintln!(
-            "tenant {}: {} hits, {} misses, {} evictions",
+            "tenant {:>2}: {:>7} /{:>3.0}% hits, {:>7} /{:>3.0}% misses, {:>7} evictions",
             t + 1,
             c.hits,
+            100. * c.hits as f32 / (c.hits as f32 + c.misses as f32),
             c.misses,
+            100. * c.misses as f32 / (c.hits as f32 + c.misses as f32),
             c.evictions
         );
         hits += c.hits;
@@ -38,8 +40,12 @@ fn run(input: impl BufRead, mut output: impl Write) {
         evictions += c.evictions;
     }
     eprintln!(
-        "total: {} hits, {} misses, {} evictions",
-        hits, misses, evictions,
+        "    total: {:>7} /{:>3.0}% hits, {:>7} /{:>3.0}% misses, {:>7} evictions",
+        hits,
+        100. * hits as f32 / (hits as f32 + misses as f32),
+        misses,
+        100. * misses as f32 / (hits as f32 + misses as f32),
+        evictions,
     );
 }
 
