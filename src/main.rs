@@ -45,11 +45,11 @@ fn run(input: impl BufRead, mut output: impl Write) {
 
 #[derive(Debug, Clone)]
 struct Buffer {
-    ledgers: Vec<HashMap<Page, (u64, usize)>>,
-    max_loc: usize,
     params: Params,
+    maps: Vec<HashMap<Page, (u64, usize)>>,
+    counters: Vec<Counters>,
+    max_loc: usize,
     now: u64,
-    counters: Vec<Counter>,
 }
 
 impl Buffer {
@@ -64,7 +64,7 @@ impl Buffer {
         );
 
         Buffer {
-            ledgers: vec![Default::default(); params.num_tenants_n],
+            maps: vec![Default::default(); params.num_tenants_n],
             counters: vec![Default::default(); params.num_tenants_n],
             max_loc: 0,
             now: 0,
@@ -73,7 +73,6 @@ impl Buffer {
     }
 
     fn len(&self) -> usize {
-        debug_assert_eq!(self.max_loc, self.ledgers.iter().map(|x| x.len()).sum());
         self.max_loc
     }
 
@@ -81,23 +80,23 @@ impl Buffer {
         self.now += 1;
 
         // Op already in the buffer, return its location.
-        if let Some((used, loc)) = self.ledgers[op.tenant.index()].get_mut(&op.page) {
+        if let Some((used, loc)) = self.maps[op.tenant.index()].get_mut(&op.page) {
+            self.counters[op.tenant.index()].hits += 1;
             *used = self.now;
             let loc = *loc;
             self.check_invariants();
-            self.counters[op.tenant.index()].hits += 1;
             return loc;
         }
 
         self.counters[op.tenant.index()].misses += 1;
 
-        let at_capacity = self.ledgers[op.tenant.index()].len()
-            == self.params.buffer_sizes_qt[op.tenant.index()].2;
+        let at_capacity =
+            self.maps[op.tenant.index()].len() == self.params.buffer_sizes_qt[op.tenant.index()].2;
 
         // Buffer and tenant not at capacity, insert op in empty space.
         if !at_capacity && self.len() < self.params.buffer_size_q {
             self.max_loc += 1;
-            self.ledgers[op.tenant.index()].insert(op.page, (self.now, self.max_loc));
+            self.maps[op.tenant.index()].insert(op.page, (self.now, self.max_loc));
             self.check_invariants();
             return self.max_loc;
         }
@@ -105,38 +104,45 @@ impl Buffer {
         // Contented, find the least worst page to swap with. If tenant is at capacity, it must
         // swap with one of its own pages.
         let (evict_owner, &evict_page, &_used, &loc) = self
-            .ledgers
+            .maps
             .iter()
             .zip(&self.params.buffer_sizes_qt)
             .enumerate()
-            .filter(|(t, (ledger, (qtmin, _, _)))| {
+            .filter(|(t, (map, (qmin, _, _)))| {
                 if at_capacity {
                     *t == op.tenant.index()
                 } else if *t == op.tenant.index() {
-                    ledger.len() >= *qtmin
+                    map.len() >= *qmin
                 } else {
-                    ledger.len() > *qtmin
+                    map.len() > *qmin
                 }
             })
-            .flat_map(|(t, (ledger, _qtlims))| {
-                ledger.iter().map(move |(p, (used, loc))| (t, p, used, loc))
+            .flat_map(|(t, (map, _qlims))| {
+                map.iter().map(move |(p, (used, loc))| (t, p, used, loc))
             })
             .min_by_key(|(_t, _p, used, _loc)| *used)
             .unwrap();
-        self.ledgers[evict_owner].remove(&evict_page);
-        self.ledgers[op.tenant.index()].insert(op.page, (self.now, loc));
-        self.check_invariants();
+        self.maps[evict_owner].remove(&evict_page);
         self.counters[evict_owner].evictions += 1;
+        self.maps[op.tenant.index()].insert(op.page, (self.now, loc));
+        self.check_invariants();
         loc
     }
 
     #[cfg(debug_assertions)]
     fn check_invariants(&self) {
+        assert_eq!(self.max_loc, self.maps.iter().map(|x| x.len()).sum());
+
         assert!(self.len() <= self.params.buffer_size_q);
-        for (tidx, ledger) in self.ledgers.iter().enumerate() {
-            let (_, _, qmax) = self.params.buffer_sizes_qt[tidx];
-            assert!(ledger.len() <= qmax);
-            assert!(ledger.len() <= self.params.db_size_dt[tidx]);
+
+        for (t, (map, (_, _, qmax))) in self
+            .maps
+            .iter()
+            .zip(&self.params.buffer_sizes_qt)
+            .enumerate()
+        {
+            assert!(map.len() <= *qmax);
+            assert!(map.len() <= self.params.db_size_dt[t]);
         }
     }
 
@@ -231,7 +237,7 @@ impl Tenant {
 struct Page(u32);
 
 #[derive(Debug, Clone, Copy, Default)]
-struct Counter {
+struct Counters {
     pub hits: u32,
     pub misses: u32,
     pub evictions: u32,
