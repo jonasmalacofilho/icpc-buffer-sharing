@@ -91,44 +91,42 @@ impl Buffer {
 
         self.counters[op.tenant.index()].misses += 1;
 
-        // Tenant at capacity, must swap with one of its own pages.
-        if self.ledgers[op.tenant.index()].len() == self.params.buffer_sizes_qt[op.tenant.index()].2
-        {
-            let (&evicted, &(_, loc)) = self.ledgers[op.tenant.index()]
-                .iter()
-                .min_by_key(|(_, (used, _))| used)
-                .unwrap();
-            self.ledgers[op.tenant.index()].remove(&evicted);
-            self.ledgers[op.tenant.index()].insert(op.page, (self.now, loc));
-            self.check_invariants();
-            self.counters[op.tenant.index()].evictions += 1;
-            return loc;
-        }
+        let at_capacity = self.ledgers[op.tenant.index()].len()
+            == self.params.buffer_sizes_qt[op.tenant.index()].2;
 
         // Buffer and tenant not at capacity, insert op in empty space.
-        if self.len() < self.params.buffer_size_q {
+        if !at_capacity && self.len() < self.params.buffer_size_q {
             self.max_loc += 1;
             self.ledgers[op.tenant.index()].insert(op.page, (self.now, self.max_loc));
             self.check_invariants();
             return self.max_loc;
         }
 
-        // Contented, find the least worst page to swap with.
-        let (tidx, &evicted, &(_, loc)) = self
+        // Contented, find the least worst page to swap with. If tenant is at capacity, it must
+        // swap with one of its own pages.
+        let (evict_owner, &evict_page, &_used, &loc) = self
             .ledgers
             .iter()
-            .zip(self.params.buffer_sizes_qt.iter())
+            .zip(&self.params.buffer_sizes_qt)
             .enumerate()
-            // FIXME: can replace own page if at Qmin (but pages of other tenants only if they're
-            // *above* their Qmin).
-            .filter(|(_, (ledger, (qtmin, _, _)))| ledger.len() > *qtmin)
-            .flat_map(|(tidx, (ledger, _))| ledger.iter().map(move |(k, v)| (tidx, k, v)))
-            .min_by_key(|(_, _, (used, _))| used)
+            .filter(|(t, (ledger, (qtmin, _, _)))| {
+                if at_capacity {
+                    *t == op.tenant.index()
+                } else if *t == op.tenant.index() {
+                    ledger.len() >= *qtmin
+                } else {
+                    ledger.len() > *qtmin
+                }
+            })
+            .flat_map(|(t, (ledger, _qtlims))| {
+                ledger.iter().map(move |(p, (used, loc))| (t, p, used, loc))
+            })
+            .min_by_key(|(_t, _p, used, _loc)| *used)
             .unwrap();
-        self.ledgers[tidx].remove(&evicted);
+        self.ledgers[evict_owner].remove(&evict_page);
         self.ledgers[op.tenant.index()].insert(op.page, (self.now, loc));
         self.check_invariants();
-        self.counters[tidx].evictions += 1;
+        self.counters[evict_owner].evictions += 1;
         loc
     }
 
