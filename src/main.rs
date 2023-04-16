@@ -23,6 +23,24 @@ fn run(input: impl BufRead, mut output: impl Write) {
         writeln!(&mut output, "{loc}").unwrap();
         output.flush().unwrap();
     }
+
+    let (mut hits, mut misses, mut evictions) = (0, 0, 0);
+    for (t, c) in buffer.counters.iter().enumerate() {
+        eprintln!(
+            "tenant {}: {} hits, {} misses, {} evictions",
+            t + 1,
+            c.hits,
+            c.misses,
+            c.evictions
+        );
+        hits += c.hits;
+        misses += c.misses;
+        evictions += c.evictions;
+    }
+    eprintln!(
+        "total: {} hits, {} misses, {} evictions",
+        hits, misses, evictions,
+    );
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +49,7 @@ struct Buffer {
     max_loc: usize,
     params: Params,
     now: u64,
+    counters: Vec<Counter>,
 }
 
 impl Buffer {
@@ -46,6 +65,7 @@ impl Buffer {
 
         Buffer {
             ledgers: vec![Default::default(); params.num_tenants_n],
+            counters: vec![Default::default(); params.num_tenants_n],
             max_loc: 0,
             now: 0,
             params,
@@ -65,23 +85,23 @@ impl Buffer {
             *used = self.now;
             let loc = *loc;
             self.check_invariants();
+            self.counters[op.tenant.index()].hits += 1;
             return loc;
         }
+
+        self.counters[op.tenant.index()].misses += 1;
 
         // Tenant at capacity, must swap with one of its own pages.
         if self.ledgers[op.tenant.index()].len() == self.params.buffer_sizes_qt[op.tenant.index()].2
         {
-            let (&evicted, &(evicted_used, loc)) = self.ledgers[op.tenant.index()]
+            let (&evicted, &(_, loc)) = self.ledgers[op.tenant.index()]
                 .iter()
                 .min_by_key(|(_, (used, _))| used)
                 .unwrap();
-            eprintln!(
-                "// replacing own {evicted:?}, last used {evicted_used} (now is {})",
-                self.now
-            );
             self.ledgers[op.tenant.index()].remove(&evicted);
             self.ledgers[op.tenant.index()].insert(op.page, (self.now, loc));
             self.check_invariants();
+            self.counters[op.tenant.index()].evictions += 1;
             return loc;
         }
 
@@ -94,7 +114,7 @@ impl Buffer {
         }
 
         // Contented, find the least worst page to swap with.
-        let (tidx, &evicted, &(evicted_used, loc)) = self
+        let (tidx, &evicted, &(_, loc)) = self
             .ledgers
             .iter()
             .zip(self.params.buffer_sizes_qt.iter())
@@ -105,13 +125,10 @@ impl Buffer {
             .flat_map(|(tidx, (ledger, _))| ledger.iter().map(move |(k, v)| (tidx, k, v)))
             .min_by_key(|(_, _, (used, _))| used)
             .unwrap();
-        eprintln!(
-            "// replacing {tidx:?}'s {evicted:?}, last used {evicted_used} (now is {})",
-            self.now
-        );
         self.ledgers[tidx].remove(&evicted);
         self.ledgers[op.tenant.index()].insert(op.page, (self.now, loc));
         self.check_invariants();
+        self.counters[tidx].evictions += 1;
         loc
     }
 
@@ -214,6 +231,13 @@ impl Tenant {
 /// Page/object `Pi`, where `1 <= i <= M`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Page(u32);
+
+#[derive(Debug, Clone, Copy, Default)]
+struct Counter {
+    pub hits: u32,
+    pub misses: u32,
+    pub evictions: u32,
+}
 
 #[cfg(test)]
 mod tests;
