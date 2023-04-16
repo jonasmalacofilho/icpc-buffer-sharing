@@ -141,10 +141,11 @@ impl Buffer {
                     map.len() > *qmin
                 }
             })
-            // FIXME: use .min_by with f32::total_cmp
             .min_by_key(|(t, (map, (_, qbase, _)))| {
-                let sla_proxy = (*qbase as f32) / (map.len() as f32);
-                (3. * sla_proxy.max(1.).powi(2) * (self.params.priorities_lt[*t] as f32)) as u64
+                let sla_rate = ((*qbase as f32) / (map.len() as f32)).max(1.) - 1.;
+                let cost = (3. * sla_rate.powi(2) * (self.params.priorities_lt[*t] as f32)) as u64;
+                let &HeapEntry(_p, used) = self.heaps[*t].peek().unwrap();
+                (cost, used)
             })
             .unwrap();
         let (evict_page, _used, loc) = loop {
