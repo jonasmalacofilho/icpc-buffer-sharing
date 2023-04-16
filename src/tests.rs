@@ -1,6 +1,6 @@
 use super::*;
 
-fn op(ti: u8, pi: usize) -> Operation {
+fn op(ti: u8, pi: u32) -> Operation {
     Operation {
         tenant: Tenant(ti),
         page: Page(pi),
