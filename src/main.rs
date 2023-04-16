@@ -180,6 +180,10 @@ impl Buffer {
             assert!(map.len() <= *qmax);
             assert!(map.len() <= self.params.db_size_dt[t]);
         }
+
+        for (map, heap) in self.maps.iter().zip(&self.heaps) {
+            assert_eq!(map.len(), heap.len());
+        }
     }
 
     #[cfg(not(debug_assertions))]
