@@ -15,6 +15,7 @@ ICPC 2023 Online Spring Challenge powered by Huawei.
 | 45c8da5bda64 | [6466 pts][202343314] |  11106 ms | 3 MB | Clamp the cost model when Qactual >= Qbase |
 | 95a15d73a7dc | [8738 pts][202349459] |  10279 ms | 2 MB | Fix cost model and break ties with used |
 | d637a6d2c895 | [9352 pts][202352504] |   9890 ms | 2 MB | Probability-weighted cost minimzation |
+| 3f8aca1b7733 | [4435 pts][202404464] |  10061 ms | 2 MB | N/A |
 
 [202281228]: https://codeforces.com/contest/1813/submission/202281228
 [202299987]: https://codeforces.com/contest/1813/submission/202299987
@@ -25,3 +26,4 @@ ICPC 2023 Online Spring Challenge powered by Huawei.
 [202343314]: https://codeforces.com/contest/1813/submission/202343314
 [202349459]: https://codeforces.com/contest/1813/submission/202349459
 [202352504]: https://codeforces.com/contest/1813/submission/202352504
+[202404464]: https://codeforces.com/contest/1813/submission/202404464
