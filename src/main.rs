@@ -142,10 +142,11 @@ impl Buffer {
                 }
             })
             .min_by_key(|(t, (map, (_, qbase, _)))| {
-                let sla_rate = ((*qbase as f32) / (map.len() as f32)).max(1.) - 1.;
-                let cost = (3. * sla_rate.powi(2) * (self.params.priorities_lt[*t] as f32)) as u64;
+                let sla_rate = (*qbase as f32 / map.len() as f32 - 1.).max(0.);
+                let cost = 3. * sla_rate.powi(2) * (self.params.priorities_lt[*t] as f32);
                 let &HeapEntry(_p, used) = self.heaps[*t].peek().unwrap();
-                (cost, used)
+                let pcost = used as f32 / self.now as f32 * cost;
+                (pcost as u64, used)
             })
             .unwrap();
         let (evict_page, _used, loc) = loop {
