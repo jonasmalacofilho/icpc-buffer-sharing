@@ -1,6 +1,6 @@
 //! Copyright 2023 Jonas Malaco.
 
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap};
 use std::io::{self, BufRead, Lines, Write};
 
 fn main() {
@@ -47,9 +47,31 @@ fn run(input: impl BufRead, mut output: impl Write) {
 struct Buffer {
     params: Params,
     maps: Vec<HashMap<Page, (u64, usize)>>,
+    heaps: Vec<BinaryHeap<HeapEntry>>,
     counters: Vec<Counters>,
     max_loc: usize,
     now: u64,
+}
+
+#[derive(Debug, Clone, Copy, Eq)]
+struct HeapEntry(Page, u64);
+
+impl PartialEq for HeapEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.1 == other.1
+    }
+}
+
+impl Ord for HeapEntry {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.1.cmp(&self.1)
+    }
+}
+
+impl PartialOrd for HeapEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl Buffer {
@@ -65,6 +87,7 @@ impl Buffer {
 
         Buffer {
             maps: vec![Default::default(); params.num_tenants_n],
+            heaps: vec![Default::default(); params.num_tenants_n],
             counters: vec![Default::default(); params.num_tenants_n],
             max_loc: 0,
             now: 0,
@@ -97,13 +120,14 @@ impl Buffer {
         if !at_capacity && self.len() < self.params.buffer_size_q {
             self.max_loc += 1;
             self.maps[op.tenant.index()].insert(op.page, (self.now, self.max_loc));
+            self.heaps[op.tenant.index()].push(HeapEntry(op.page, self.now));
             self.check_invariants();
             return self.max_loc;
         }
 
         // Contented, find the least worst page to swap with. If tenant is at capacity, it must
         // swap with one of its own pages.
-        let (evict_owner, &evict_page, &_used, &loc) = self
+        let (evict_owner, _) = self
             .maps
             .iter()
             .zip(&self.params.buffer_sizes_qt)
@@ -117,14 +141,24 @@ impl Buffer {
                     map.len() > *qmin
                 }
             })
-            .flat_map(|(t, (map, _qlims))| {
-                map.iter().map(move |(p, (used, loc))| (t, p, used, loc))
+            .min_by_key(|(t, _)| {
+                let &HeapEntry(_p, used) = self.heaps[*t].peek().unwrap();
+                used
             })
-            .min_by_key(|(_t, _p, used, _loc)| *used)
             .unwrap();
+        let (evict_page, _used, loc) = loop {
+            let HeapEntry(p, used) = self.heaps[evict_owner].pop().unwrap();
+            let &(last_used, loc) = &self.maps[evict_owner][&p];
+            if last_used > used {
+                self.heaps[evict_owner].push(HeapEntry(p, last_used));
+                continue;
+            }
+            break (p, used, loc);
+        };
         self.maps[evict_owner].remove(&evict_page);
         self.counters[evict_owner].evictions += 1;
         self.maps[op.tenant.index()].insert(op.page, (self.now, loc));
+        self.heaps[op.tenant.index()].push(HeapEntry(op.page, self.now));
         self.check_invariants();
         loc
     }
@@ -223,6 +257,7 @@ impl Operation {
 }
 
 /// Tenant `Ui`, where `1 <= i <= M`.
+// FIXME: encode non-zero invariant (if applicable) in the type system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Tenant(u8);
 
@@ -233,6 +268,7 @@ impl Tenant {
 }
 
 /// Page/object `Pi`, where `1 <= i <= M`.
+// FIXME: encode non-zero invariant (if applicable) in the type system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Page(u32);
 
