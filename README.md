@@ -13,6 +13,7 @@ ICPC 2023 Online Spring Challenge powered by Huawei.
 | 9ef41e695560 | [9673 pts][202337971] |  11216 ms | 2 MB | Multi-tenant LRU using a binary heap |
 | b942f2e57761 | [7069 pts][202340052] |  11044 ms | 3 MB | Add a cost model |
 | 45c8da5bda64 | [6466 pts][202343314] |  11106 ms | 3 MB | Clamp the cost model when Qactual >= Qbase |
+| 95a15d73a7dc | [8738 pts][202349459] |  10279 ms | 2 MB | Fix cost model and break ties with used |
 
 [202281228]: https://codeforces.com/contest/1813/submission/202281228
 [202299987]: https://codeforces.com/contest/1813/submission/202299987
@@ -21,3 +22,4 @@ ICPC 2023 Online Spring Challenge powered by Huawei.
 [202337971]: https://codeforces.com/contest/1813/submission/202337971
 [202340052]: https://codeforces.com/contest/1813/submission/202340052
 [202343314]: https://codeforces.com/contest/1813/submission/202343314
+[202349459]: https://codeforces.com/contest/1813/submission/202349459
