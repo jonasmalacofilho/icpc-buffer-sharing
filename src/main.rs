@@ -159,9 +159,9 @@ impl Buffer {
                     map.len() > *qmin
                 }
             })
-            .min_by_key(|(t, _)| {
+            .min_by_key(|(t, (map, (_, qbase, _)))| {
                 let &HeapEntry(_p, used) = self.heaps[*t].peek().unwrap();
-                used
+                (map.len() < *qbase, used)
             })
             .unwrap();
         let HeapEntry(evict_page, used) = self.heaps[evict_owner].pop().unwrap();
