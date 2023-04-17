@@ -161,10 +161,11 @@ impl Buffer {
             })
             .min_by_key(|(t, (map, (_, qbase, _)))| {
                 let &HeapEntry(_p, used) = self.heaps[*t].peek().unwrap();
+                let c = self.counters[*t];
                 if map.len() >= *qbase {
-                    (0, used)
+                    (0, 0, used)
                 } else {
-                    (1, used)
+                    (1, 1000 * c.hits / (c.hits + c.misses), used)
                 }
             })
             .unwrap();
