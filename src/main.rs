@@ -161,7 +161,7 @@ impl Buffer {
             })
             .min_by_key(|(t, (map, (_, qbase, _)))| {
                 let &HeapEntry(_p, used) = self.heaps[*t].peek().unwrap();
-                if map.len() >= *qbase {
+                if map.len() > *qbase {
                     (0, used)
                 } else {
                     (1, used)
