@@ -19,6 +19,8 @@ ICPC 2023 Online Spring Challenge powered by Huawei.
 | 0f6058e9ccb9 |  [9676 pts][202420355] |  11575 ms | 2 MB | mtLRU with reinsertion of outdated entries |
 | cf30f1620020 | [10152 pts][202442633] |  10607 ms | 2 MB | + prioritize tenants bellow qbase |
 | 8dc352a698b0 | [10152 pts][202443198] |  10436 ms | 2 MB | (check that we're deterministic) |
+| c2d348a0b12a |  7241 pts ||| try 1000 hit rate brackets |
+| 76929737dd38 |  9871 pts ||| try 2 hit rate brackets |
 
 [202281228]: https://codeforces.com/contest/1813/submission/202281228
 [202299987]: https://codeforces.com/contest/1813/submission/202299987
