@@ -53,28 +53,28 @@ fn run(input: impl BufRead, mut output: impl Write) {
 struct Buffer {
     params: Params,
     maps: Vec<HashMap<Page, (u64, usize)>>,
-    heaps: Vec<BinaryHeap<HeapEntry>>,
+    heaps: Vec<BinaryHeap<LruEntry>>,
     counters: Vec<Counters>,
     max_loc: usize,
     now: u64,
 }
 
 #[derive(Debug, Clone, Copy, Eq)]
-struct HeapEntry(Page, u64);
+struct LruEntry(Page, u64);
 
-impl PartialEq for HeapEntry {
+impl PartialEq for LruEntry {
     fn eq(&self, other: &Self) -> bool {
         self.1 == other.1
     }
 }
 
-impl Ord for HeapEntry {
+impl Ord for LruEntry {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         other.1.cmp(&self.1)
     }
 }
 
-impl PartialOrd for HeapEntry {
+impl PartialOrd for LruEntry {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
@@ -126,20 +126,20 @@ impl Buffer {
         if !at_capacity && self.len() < self.params.buffer_size_q {
             self.max_loc += 1;
             self.maps[op.tenant.index()].insert(op.page, (self.now, self.max_loc));
-            self.heaps[op.tenant.index()].push(HeapEntry(op.page, self.now));
+            self.heaps[op.tenant.index()].push(LruEntry(op.page, self.now));
             self.check_invariants();
             return self.max_loc;
         }
 
         // Reinsert any entries at the front of the heaps with outdated `used` values.
         for (heap, map) in self.heaps.iter_mut().zip(&self.maps) {
-            while let Some(&HeapEntry(p, used)) = heap.peek() {
+            while let Some(&LruEntry(p, used)) = heap.peek() {
                 let &(last_used, _) = &map[&p];
                 if used == last_used {
                     break;
                 }
                 heap.pop();
-                heap.push(HeapEntry(p, last_used));
+                heap.push(LruEntry(p, last_used));
             }
         }
 
@@ -160,7 +160,7 @@ impl Buffer {
                 }
             })
             .min_by_key(|(t, (map, (_, qbase, _)))| {
-                let &HeapEntry(_p, used) = self.heaps[*t].peek().unwrap();
+                let &LruEntry(_p, used) = self.heaps[*t].peek().unwrap();
                 if map.len() > *qbase {
                     (0, used)
                 } else {
@@ -168,13 +168,13 @@ impl Buffer {
                 }
             })
             .unwrap();
-        let HeapEntry(evict_page, used) = self.heaps[evict_owner].pop().unwrap();
+        let LruEntry(evict_page, used) = self.heaps[evict_owner].pop().unwrap();
         let &(last_used, loc) = &self.maps[evict_owner][&evict_page];
         debug_assert_eq!(used, last_used);
         self.maps[evict_owner].remove(&evict_page);
         self.counters[evict_owner].evictions += 1;
         self.maps[op.tenant.index()].insert(op.page, (self.now, loc));
-        self.heaps[op.tenant.index()].push(HeapEntry(op.page, self.now));
+        self.heaps[op.tenant.index()].push(LruEntry(op.page, self.now));
         self.check_invariants();
         loc
     }
@@ -202,6 +202,101 @@ impl Buffer {
 
     #[cfg(not(debug_assertions))]
     fn check_invariants(&self) {}
+}
+
+#[derive(Debug, Clone)]
+struct Lru2 {
+    dir: HashMap<Page, ([u64; 2], usize)>,
+    heap: BinaryHeap<Lru2Entry>,
+    crp: u64,
+
+    hits: usize,
+    misses: usize,
+    evictions: usize,
+}
+
+impl Lru2 {
+    pub fn new(crp: u64) -> Self {
+        Lru2 {
+            dir: Default::default(),
+            heap: Default::default(),
+            crp,
+
+            hits: 0,
+            misses: 0,
+            evictions: 0,
+        }
+    }
+
+    pub fn get(&mut self, t: u64, page: Page) -> Option<usize> {
+        if let Some((hist, loc)) = self.dir.get_mut(&page) {
+            update_lru2_history(hist, t, self.crp);
+            // Fixing the heap is delegated to other methods.
+            self.hits += 1;
+            Some(*loc)
+        } else {
+            self.misses += 1;
+            None
+        }
+    }
+
+    pub fn push(&mut self, page: Page, v: usize) {
+        todo!()
+    }
+
+    pub fn peek_lru2(&mut self) -> Option<(Page, usize, [u64; 2])> {
+        self.fix_heap();
+        self.heap
+            .peek()
+            .map(|&Lru2Entry(page, hist)| (page, self.dir[&page].1, hist))
+    }
+
+    fn fix_heap(&mut self) {
+        while let Some(mut entry) = self.heap.peek_mut() {
+            let Lru2Entry(page, hist) = &mut *entry;
+            let &(last_hist, _) = &self.dir[page];
+            if *hist == last_hist {
+                // We only care about the top of the heap: `get`/`push` will never change an
+                // `last_hist` in the direction of the top/front of the heap.
+                break;
+            }
+            *hist = last_hist;
+            // Droping `entry` will do the rest, i.e. fix-down the heap.
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq)]
+struct Lru2Entry(Page, [u64; 2]);
+
+impl PartialEq for Lru2Entry {
+    fn eq(&self, other: &Self) -> bool {
+        self.1 == other.1
+    }
+}
+
+impl Ord for Lru2Entry {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.1[1] != 0 || other.1[1] != 0 {
+            other.1[1].cmp(&self.1[1])
+        } else {
+            other.1[0].cmp(&self.1[0])
+        }
+    }
+}
+
+impl PartialOrd for Lru2Entry {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+fn update_lru2_history(hist: &mut [u64; 2], t: u64, crp: u64) {
+    if hist[0] + crp > t {
+        return;
+    }
+    hist[1] = hist[0];
+    hist[0] = t;
 }
 
 #[derive(Debug, Clone, Default)]
