@@ -103,3 +103,44 @@ fn parse_maximums() {
     ".as_slice();
     Params::from_lines(&mut inp.lines());
 }
+
+mod lru_list {
+    use crate::lru_list::LruList;
+
+    #[test]
+    fn smoke() {
+        let mut list = LruList::new();
+
+        list.push_mru(1);
+        list.push_mru(2);
+        list.push_mru(3);
+        list.push_lru(4);
+        list.push_lru(5);
+        assert_eq!(list.len(), 5);
+        assert_eq!(list.peek_mru(), Some(&3));
+        assert_eq!(list.peek_lru(), Some(&5));
+
+        assert_eq!(list.pop_mru(), Some(3));
+        assert_eq!(list.pop_mru(), Some(2));
+        assert_eq!(list.pop_lru(), Some(5));
+        assert_eq!(list.pop_lru(), Some(4));
+        assert_eq!(list.pop_lru(), Some(1));
+        assert_eq!(list.len(), 0);
+        assert_eq!(list.pop_mru(), None);
+        assert_eq!(list.pop_lru(), None);
+        assert_eq!(list.peek_mru(), None);
+        assert_eq!(list.peek_lru(), None);
+
+        let a = list.push_mru(1);
+        let b = list.push_mru(2);
+        list.push_mru(3);
+        assert_eq!(unsafe { list.peek_inside(&a) }, &1);
+        assert_eq!(unsafe { list.peek_inside(&b) }, &2);
+
+        assert_eq!(unsafe { list.remove(b) }, 2);
+        assert_eq!(unsafe { list.remove(a) }, 1);
+        assert_eq!(list.len(), 1);
+        assert_eq!(list.peek_mru(), Some(&3));
+        assert_eq!(list.peek_lru(), Some(&3));
+    }
+}
