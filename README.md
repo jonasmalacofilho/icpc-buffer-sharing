@@ -23,7 +23,9 @@ ICPC 2023 Online Spring Challenge powered by Huawei.
 | 76929737dd38 |   [9871 pt][202444509] ||| try 2 hit rate brackets |
 | 4988a140319e |[(10152) pt][202495737] ||| prioritize tenants bellow/at qbase |
 | 5b1e4e89bde7 |   [7571 pt][202496657] ||| try 1000 qbase/qcur brackets |
+| 6fc5f1a1a205 |       [N/A][203135317] | 10779 ms | 4 MB | 9 runtime errors; 5 nil points |
 
+[203135317]: #
 [202496657]: #
 [202495737]: #
 [202444509]: #
