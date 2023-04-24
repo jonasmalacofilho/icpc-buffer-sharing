@@ -84,7 +84,7 @@ fn arc_tenant_at_qmax_fully_in_t2() {
     buffer.locate(op(2, 3));
 
     assert_eq!(buffer.locate(op(1, 2)), a);
-    assert_eq!(buffer.len(), 4);
+    assert_eq!(buffer.len(), 2);
 }
 
 #[test]

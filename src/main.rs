@@ -1,6 +1,6 @@
 //! Copyright 2023 Jonas Malaco.
 
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::HashMap;
 use std::io::{self, BufRead, Lines, Write};
 
 fn main() {
@@ -125,6 +125,7 @@ impl Buffer {
         }
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.max_loc
     }
@@ -141,16 +142,16 @@ impl Buffer {
                     // Cache hit in Arc and Virt. Move to MRU position in T2.
                     self.counters[t].hits += 1;
 
+                    // Move from current list (keeping the buffer location)...
                     let list = match list {
                         List::T1 => &mut self.arc_t1[t],
                         List::T2 => &mut self.arc_t2[t],
                         _ => unreachable!(),
                     };
-
-                    // Move to MRU position in T2 and update the directory.
                     let (_, _, location) = unsafe { list.remove(node_ref) };
-                    let new_ref = self.arc_t2[t].push_mru((op, self.op_time, location));
-                    self.arc_dir[t].insert(p, (List::T2, new_ref));
+
+                    // ... to MRU position in T2.
+                    self.push_mru_update_dir(List::T2, (op, self.op_time, location));
 
                     location
                 }
@@ -158,16 +159,16 @@ impl Buffer {
                     // Cache miss in Arc, but hit in Virt/L1. Move to MRU position in T2.
                     self.counters[t].misses += 1;
 
-                    // Update p.
+                    // Adapt/update `p`.
                     let delta = (self.arc_b2.len() / self.arc_b1.len()).max(1);
                     self.arc_p = (self.arc_p + delta).min(self.params.buffer_size_q);
 
+                    // Evict some other operation and take its buffer location.
                     let location = self.replace(t, List::B1);
 
-                    // Move to MRU position in T2 and update the directory.
+                    // Move from B1 to MRU position in T2.
                     let _ = unsafe { self.arc_b1.remove(node_ref) };
-                    let new_ref = self.arc_t2[t].push_mru((op, self.op_time, location));
-                    self.arc_dir[t].insert(p, (List::T2, new_ref));
+                    self.push_mru_update_dir(List::T2, (op, self.op_time, location));
 
                     location
                 }
@@ -175,16 +176,16 @@ impl Buffer {
                     // Cache miss in Arc, but hit in Virt/L2. Move to MRU position in T2.
                     self.counters[t].misses += 1;
 
-                    // Update p.
+                    // Adapt/update `p`.
                     let delta = (self.arc_b1.len() / self.arc_b2.len()).max(1);
                     self.arc_p = self.arc_p.saturating_sub(delta);
 
+                    // Evict some other operation and take its buffer location.
                     let location = self.replace(t, List::B2);
 
-                    // Move to MRU position in T2 and update the directory.
+                    // Move from B2 to MRU position in T2.
                     let _ = unsafe { self.arc_b2.remove(node_ref) };
-                    let new_ref = self.arc_t2[t].push_mru((op, self.op_time, location));
-                    self.arc_dir[t].insert(p, (List::T2, new_ref));
+                    self.push_mru_update_dir(List::T2, (op, self.op_time, location));
 
                     location
                 }
@@ -205,7 +206,8 @@ impl Buffer {
                     self.arc_dir[del.tenant.index()].remove(&del.page);
                     self.replace(t, List::T1) // HACK: using T1 as !B2 (FIXME)
                 } else {
-                    let (del, _, location) = self.pop_t1_lru(t).unwrap();
+                    // T1 == buffer_size_q
+                    let (del, _, location) = self.pop_lru(List::T1, t).unwrap();
                     self.arc_dir[del.tenant.index()].remove(&del.page);
                     self.counters[del.tenant.index()].evictions += 1;
                     location
@@ -221,8 +223,7 @@ impl Buffer {
                 self.max_loc
             };
 
-            let new_ref = self.arc_t1[t].push_mru((op, self.op_time, location));
-            self.arc_dir[t].insert(p, (List::T1, new_ref));
+            self.push_mru_update_dir(List::T1, (op, self.op_time, location));
 
             location
         }
@@ -230,50 +231,76 @@ impl Buffer {
 
     fn replace(&mut self, cur_t: usize, cur_list: List) -> usize {
         let t1_len: usize = self.arc_t1.iter().map(|x| x.len()).sum();
-        if t1_len > 0 && (t1_len > self.arc_p || (cur_list == List::B2 && t1_len == self.arc_p)) {
-            // Delete LRU *suitable* page in T1 and move it to MRU position in B1.
-            let (old_op, old_time, location) = self.pop_t1_lru(cur_t).unwrap();
-            let new_ref = self.arc_b1.push_mru((old_op, old_time, usize::MAX));
-            self.arc_dir[old_op.tenant.index()].insert(old_op.page, (List::B1, new_ref));
-            self.counters[old_op.tenant.index()].evictions += 1;
-            location
+
+        let prio = if t1_len > 0
+            && (t1_len > self.arc_p || (cur_list == List::B2 && t1_len == self.arc_p))
+        {
+            // Prefer to delete LRU *suitable* page in T1 and move it to MRU position in B1.
+            [(List::T1, List::B1), (List::T2, List::B2)]
         } else {
-            // Delete LRU *suitable* page in T2 and move it to MRU position in B2.
-            let (old_op, old_time, location) = self.pop_t2_lru(cur_t).unwrap();
-            let new_ref = self.arc_b2.push_mru((old_op, old_time, usize::MAX));
-            self.arc_dir[old_op.tenant.index()].insert(old_op.page, (List::B2, new_ref));
-            self.counters[old_op.tenant.index()].evictions += 1;
-            location
+            // Prefer to delete LRU *suitable* page in T2 and move it to MRU position in B2.
+            [(List::T2, List::B2), (List::T1, List::B1)]
+        };
+
+        for (source, destination) in prio {
+            if let Some((old_op, old_time, location)) = self.pop_lru(source, cur_t) {
+                self.push_mru_update_dir(destination, (old_op, old_time, usize::MAX));
+                self.counters[old_op.tenant.index()].evictions += 1;
+                return location;
+            }
         }
+
+        unreachable!()
     }
 
-    fn pop_t1_lru(&mut self, recipient: usize) -> Option<NodeData> {
-        if let Some((donor, _)) = self
-            .arc_t1
-            .iter()
-            .zip(self.filter(recipient))
-            .enumerate()
-            .filter(|(_et, (t1, suitable))| *suitable && t1.len() > 0)
-            .min_by_key(|(_et, (t1, _))| t1.peek_lru().unwrap().1)
-        {
-            self.arc_t1[donor].pop_lru()
-        } else {
-            None
-        }
+    fn push_mru_update_dir(&mut self, dest: List, data: NodeData) {
+        let t = data.0.tenant.index();
+        let p = data.0.page;
+        let list = match dest {
+            List::T1 => &mut self.arc_t1[t],
+            List::T2 => &mut self.arc_t2[t],
+            List::B1 => &mut self.arc_b1,
+            List::B2 => &mut self.arc_b2,
+        };
+        let new_ref = list.push_mru(data);
+        self.arc_dir[t].insert(p, (dest, new_ref));
     }
 
-    fn pop_t2_lru(&mut self, recipient: usize) -> Option<NodeData> {
-        if let Some((donor, _)) = self
-            .arc_t2
-            .iter()
-            .zip(self.filter(recipient))
-            .enumerate()
-            .filter(|(_et, (t2, suitable))| *suitable && t2.len() > 0)
-            .min_by_key(|(_et, (t2, _))| t2.peek_lru().unwrap().1)
-        {
-            self.arc_t2[donor].pop_lru()
-        } else {
-            None
+    fn pop_lru(&mut self, source: List, recipient: usize) -> Option<NodeData> {
+        match source {
+            List::T1 | List::T2 => {
+                let list = match source {
+                    List::T1 => &self.arc_t1,
+                    List::T2 => &self.arc_t2,
+                    _ => unreachable!(),
+                };
+
+                if let Some((donor, _)) = list
+                    .iter()
+                    .zip(self.filter(recipient))
+                    .enumerate()
+                    .filter(|(_donor, (list, suitable))| *suitable && list.len() > 0)
+                    .min_by_key(|(_donor, (list, _))| list.peek_lru().unwrap().1)
+                {
+                    let list = match source {
+                        List::T1 => &mut self.arc_t1[donor],
+                        List::T2 => &mut self.arc_t2[donor],
+                        _ => unreachable!(),
+                    };
+                    list.pop_lru()
+                } else {
+                    None
+                }
+            }
+            List::B1 | List::B2 => {
+                let list = match source {
+                    List::B1 => &mut self.arc_b1,
+                    List::B2 => &mut self.arc_b2,
+                    _ => unreachable!(),
+                };
+
+                list.pop_lru()
+            }
         }
     }
 
@@ -296,14 +323,6 @@ impl Buffer {
                 }
             })
     }
-
-    #[cfg(debug_assertions)]
-    fn check_invariants(&self) {
-        todo!()
-    }
-
-    #[cfg(not(debug_assertions))]
-    fn check_invariants(&self) {}
 }
 
 #[derive(Debug, Clone, Default)]
@@ -466,10 +485,12 @@ mod lru_list {
             })
         }
 
+        #[allow(dead_code)]
         pub fn peek_mru(&self) -> Option<&T> {
             self.more.map(|node| unsafe { &node.as_ref().data })
         }
 
+        #[allow(dead_code)]
         pub fn push_lru(&mut self, data: T) -> NodeRef<T> {
             let new = Box::into_raw(Box::new(Node {
                 more: self.less,
@@ -529,6 +550,7 @@ mod lru_list {
         // SAFETY: caller must ensure `node_ref` belongs to this list and isn't dangling. To be
         // safe, every time a node is popped from the list, the caller should discard the its
         // corresponding `NodeRef`.
+        #[allow(dead_code)]
         pub unsafe fn peek_inside(&self, node_ref: &NodeRef<T>) -> &T {
             unsafe { &node_ref.node.as_ref().data }
         }
