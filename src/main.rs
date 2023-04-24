@@ -248,27 +248,33 @@ impl Buffer {
     }
 
     fn pop_t1_lru(&mut self, recipient: usize) -> Option<NodeData> {
-        let (donor, _) = self
+        if let Some((donor, _)) = self
             .arc_t1
             .iter()
             .zip(self.filter(recipient))
             .enumerate()
             .filter(|(_et, (t1, suitable))| *suitable && t1.len() > 0)
             .min_by_key(|(_et, (t1, _))| t1.peek_lru().unwrap().1)
-            .unwrap();
-        self.arc_t1[donor].pop_lru()
+        {
+            self.arc_t1[donor].pop_lru()
+        } else {
+            None
+        }
     }
 
     fn pop_t2_lru(&mut self, recipient: usize) -> Option<NodeData> {
-        let (donor, _) = self
+        if let Some((donor, _)) = self
             .arc_t2
             .iter()
             .zip(self.filter(recipient))
             .enumerate()
             .filter(|(_et, (t2, suitable))| *suitable && t2.len() > 0)
             .min_by_key(|(_et, (t2, _))| t2.peek_lru().unwrap().1)
-            .unwrap();
-        self.arc_t2[donor].pop_lru()
+        {
+            self.arc_t2[donor].pop_lru()
+        } else {
+            None
+        }
     }
 
     fn filter(&self, recipient: usize) -> impl Iterator<Item = bool> + '_ {
