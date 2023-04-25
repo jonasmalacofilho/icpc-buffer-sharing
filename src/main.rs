@@ -146,7 +146,7 @@ impl Buffer {
                     self.arc_p = (self.arc_p + delta).min(self.params.buffer_size_q);
 
                     // Evict some other operation and take its buffer location.
-                    let location = self.replace(t, List::B1);
+                    let location = self.replace(t, list);
 
                     // Move from B1 to MRU position in T2.
                     let _ = unsafe { self.arc_b1.remove(node_ref) };
@@ -163,7 +163,7 @@ impl Buffer {
                     self.arc_p = self.arc_p.saturating_sub(delta);
 
                     // Evict some other operation and take its buffer location.
-                    let location = self.replace(t, List::B2);
+                    let location = self.replace(t, list);
 
                     // Move from B2 to MRU position in T2.
                     let _ = unsafe { self.arc_b2.remove(node_ref) };
