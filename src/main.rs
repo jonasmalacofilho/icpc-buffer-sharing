@@ -396,7 +396,7 @@ impl Params {
         {
             let (mut qmin, qbase, qmax) = qsizes.to_owned();
             let magic_size = magic * (*prio as usize) * q / psum / 100;
-            qmin = qmin.max(magic_size.min(*dbsize).min(qmax));
+            qmin = qmin.max(magic_size.min(qbase).min(*dbsize));
             *qsizes = (qmin, qbase, qmax);
         }
     }
