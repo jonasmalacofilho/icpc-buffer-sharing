@@ -10,8 +10,8 @@ fn main() {
 fn run(input: impl BufRead, mut output: impl Write) {
     let mut input = input.lines();
 
-    let params = Params::from_lines(&mut input);
-    let mut buffer = Buffer::with_params(params.clone());
+    let mut params = Params::from_lines(&mut input);
+    params.tune(10);
 
     debug_assert!(
         params
@@ -21,6 +21,8 @@ fn run(input: impl BufRead, mut output: impl Write) {
             .sum::<usize>()
             <= params.buffer_size_q
     );
+
+    let mut buffer = Buffer::with_params(params.clone());
 
     while let Some(op) = Operation::from_lines(&mut input) {
         debug_assert!((1..=params.num_tenants_n).contains(&(op.tenant.0 as usize)));
@@ -372,6 +374,21 @@ impl Params {
             .collect();
 
         params
+    }
+
+    fn tune(&mut self, magic: usize) {
+        let q = self.buffer_size_q;
+        for ((prio, dbsize), qsizes) in self
+            .priorities_lt
+            .iter()
+            .zip(&self.db_size_dt)
+            .zip(&mut self.buffer_sizes_qt)
+        {
+            let (mut qmin, qbase, qmax) = qsizes.to_owned();
+            let magic_size = magic * (*prio as usize) * q / 1000;
+            qmin = qmin.max(magic_size.min(*dbsize).min(qmax));
+            *qsizes = (qmin, qbase, qmax);
+        }
     }
 }
 
