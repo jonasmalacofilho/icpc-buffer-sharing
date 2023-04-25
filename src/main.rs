@@ -200,13 +200,13 @@ impl Buffer {
                 self.max_loc
             };
 
-            if self.arc_b2.len() > self.params.buffer_size_q - self.arc_p {
-                let (del, _, _) = self.arc_b2.pop_lru().unwrap();
+            if self.arc_b1.len() > self.params.buffer_size_q - self.arc_p {
+                let (del, _, _) = self.arc_b1.pop_lru().unwrap();
                 self.arc_dir[del.tenant.index()].remove(&del.page);
             }
 
-            if self.arc_b1.len() > self.params.buffer_size_q {
-                let (del, _, _) = self.arc_b1.pop_lru().unwrap();
+            if self.arc_b2.len() > self.arc_p {
+                let (del, _, _) = self.arc_b2.pop_lru().unwrap();
                 self.arc_dir[del.tenant.index()].remove(&del.page);
             }
 
