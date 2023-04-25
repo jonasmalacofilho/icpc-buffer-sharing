@@ -4,6 +4,10 @@ use std::collections::HashMap;
 use std::io::{self, BufRead, Lines, Write};
 use std::time::Instant;
 
+use lru_list::{LruList, NodeRef};
+
+const N_MAX: usize = 10;
+
 fn main() {
     let instant = Instant::now();
     run(io::stdin().lock(), io::stdout().lock());
@@ -62,10 +66,6 @@ fn run(input: impl BufRead, mut output: impl Write) {
         evictions,
     );
 }
-
-const N_MAX: usize = 10;
-
-use lru_list::{LruList, NodeRef};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum List {
