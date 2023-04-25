@@ -190,36 +190,25 @@ impl Buffer {
             // Cache miss in Arc and Virt. Move to MRU position in T1.
             self.counters[t].misses += 1;
 
-            let t1_len: usize = self.arc_t1.iter().map(|x| x.len()).sum::<usize>();
-            let t2_len: usize = self.arc_t2.iter().map(|x| x.len()).sum::<usize>();
-            let b1_len = self.arc_b1.len();
-            let b2_len = self.arc_b2.len();
             let at_qmax =
                 (self.arc_t1[t].len() + self.arc_t2[t].len()) == self.params.buffer_sizes_qt[t].2;
 
-            let location = if t1_len + b1_len == self.params.buffer_size_q {
-                if t1_len < self.params.buffer_size_q {
-                    let (del, _, _) = self.arc_b1.pop_lru().unwrap();
-                    self.arc_dir[del.tenant.index()].remove(&del.page);
-                    self.replace(t, List::T1) // HACK: using T1 as !B2 (FIXME)
-                } else {
-                    debug_assert!(t1_len == self.params.buffer_size_q);
-                    let (del, _, location) = self.pop_lru(List::T1, t).unwrap();
-                    self.arc_dir[del.tenant.index()].remove(&del.page);
-                    self.counters[del.tenant.index()].evictions += 1;
-                    location
-                }
-            } else if t1_len + t2_len + b1_len + b2_len >= self.params.buffer_size_q || at_qmax {
-                debug_assert!(t1_len + b1_len < self.params.buffer_size_q);
-                if t1_len + t2_len + b1_len + b2_len == 2 * self.params.buffer_size_q {
-                    let (del, _, _) = self.arc_b2.pop_lru().unwrap();
-                    self.arc_dir[del.tenant.index()].remove(&del.page);
-                }
+            let location = if self.len() >= self.params.buffer_size_q || at_qmax {
                 self.replace(t, List::T1) // HACK: using T1 as !B2 (FIXME)
             } else {
                 self.max_loc += 1;
                 self.max_loc
             };
+
+            if self.arc_b2.len() > self.params.buffer_size_q - self.arc_p {
+                let (del, _, _) = self.arc_b2.pop_lru().unwrap();
+                self.arc_dir[del.tenant.index()].remove(&del.page);
+            }
+
+            if self.arc_b1.len() > self.params.buffer_size_q {
+                let (del, _, _) = self.arc_b1.pop_lru().unwrap();
+                self.arc_dir[del.tenant.index()].remove(&del.page);
+            }
 
             self.push_mru_update_dir(List::T1, (op, self.op_time, location));
 
