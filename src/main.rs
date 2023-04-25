@@ -130,6 +130,10 @@ impl Buffer {
                         List::T2 => &mut self.arc_t2[t],
                         _ => unreachable!(),
                     };
+                    // SAFETY: we track both `list` and `node_ref` toghether, so the latter should
+                    // belong to the former; we also remove references from the `arc_dir` directory
+                    // when popping or removing an element from the lists, so `node_ref` should not
+                    // be dangling.
                     let (_, _, location) = unsafe { list.remove(node_ref) };
 
                     // ... to MRU position in T2.
@@ -149,6 +153,11 @@ impl Buffer {
                     let location = self.replace(t, list);
 
                     // Move from B1 to MRU position in T2.
+                    //
+                    // SAFETY: we track both `list` and `node_ref` toghether, so the latter should
+                    // belong to B1; we also remove references from the `arc_dir` directory when
+                    // popping or removing an element from the lists, so `node_ref` should not be
+                    // dangling.
                     let _ = unsafe { self.arc_b1.remove(node_ref) };
                     self.push_mru_update_dir(List::T2, (op, self.op_time, location));
 
@@ -166,6 +175,11 @@ impl Buffer {
                     let location = self.replace(t, list);
 
                     // Move from B2 to MRU position in T2.
+                    //
+                    // SAFETY: we track both `list` and `node_ref` toghether, so the latter should
+                    // belong to B2; we also remove references from the `arc_dir` directory when
+                    // popping or removing an element from the lists, so `node_ref` should not be
+                    // dangling.
                     let _ = unsafe { self.arc_b2.remove(node_ref) };
                     self.push_mru_update_dir(List::T2, (op, self.op_time, location));
 
