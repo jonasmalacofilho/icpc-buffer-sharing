@@ -282,7 +282,16 @@ impl Buffer {
                     .zip(self.filter(recipient))
                     .enumerate()
                     .filter(|(_donor, (list, suitable))| *suitable && list.len() > 0)
-                    .min_by_key(|(_donor, (list, _))| list.peek_lru().unwrap().1)
+                    .min_by_key(|(donor, (list, _))| {
+                        let used = list.peek_lru().unwrap().1;
+                        let qcur = self.arc_t1[*donor].len() + self.arc_t2[*donor].len();
+                        let qbase = self.params.buffer_sizes_qt[*donor].1;
+                        if qcur >= qbase {
+                            (0, used)
+                        } else {
+                            (1, used)
+                        }
+                    })
                 {
                     let list = match source {
                         List::T1 => &mut self.arc_t1[donor],
