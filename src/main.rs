@@ -20,7 +20,7 @@ fn run(input: impl BufRead, mut output: impl Write) {
     let mut params = Params::from_lines(&mut input);
     params.tune(20);
 
-    debug_assert!(
+    assert!(
         params
             .buffer_sizes_qt
             .iter()
