@@ -294,11 +294,11 @@ impl Buffer {
             .zip(&self.arc_t2)
             .zip(&self.params.buffer_sizes_qt)
             .enumerate()
-            .map(move |(et, ((t1, t2), (qmin, _, _)))| {
+            .map(move |(donor, ((t1, t2), (qmin, _, _)))| {
                 let q = t1.len() + t2.len();
                 if at_qmax {
-                    et == recipient
-                } else if et == recipient {
+                    donor == recipient
+                } else if donor == recipient {
                     q >= *qmin
                 } else {
                     q > *qmin
