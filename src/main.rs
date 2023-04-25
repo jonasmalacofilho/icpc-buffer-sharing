@@ -75,19 +75,18 @@ enum List {
     B2,
 }
 
-type NodeData = (Operation, u64, usize);
+type Data = (Operation, u64, usize);
 
 #[derive(Debug)]
 struct Buffer {
-    arc_dir: [HashMap<Page, (List, NodeRef<NodeData>)>; N_MAX],
-    arc_t1: [LruList<NodeData>; N_MAX],
-    arc_t2: [LruList<NodeData>; N_MAX],
-    arc_b1: LruList<NodeData>,
-    arc_b2: LruList<NodeData>,
+    arc_dir: [HashMap<Page, (List, NodeRef<Data>)>; N_MAX],
+    arc_t1: [LruList<Data>; N_MAX],
+    arc_t2: [LruList<Data>; N_MAX],
+    arc_b1: LruList<Data>,
+    arc_b2: LruList<Data>,
     arc_p: usize,
     op_time: u64,
     max_loc: usize,
-
     counters: [Counters; N_MAX],
     params: Params,
 }
@@ -103,7 +102,6 @@ impl Buffer {
             arc_p: 0,
             op_time: 0,
             max_loc: 0,
-
             counters: [Counters::default(); N_MAX],
             params,
         }
@@ -237,7 +235,7 @@ impl Buffer {
         unreachable!()
     }
 
-    fn push_mru_update_dir(&mut self, dest: List, data: NodeData) {
+    fn push_mru_update_dir(&mut self, dest: List, data: Data) {
         let t = data.0.tenant.index();
         let p = data.0.page;
         let list = match dest {
@@ -250,7 +248,7 @@ impl Buffer {
         self.arc_dir[t].insert(p, (dest, new_ref));
     }
 
-    fn pop_lru(&mut self, source: List, recipient: usize) -> Option<NodeData> {
+    fn pop_lru(&mut self, source: List, recipient: usize) -> Option<Data> {
         match source {
             List::T1 | List::T2 => {
                 let list = match source {
