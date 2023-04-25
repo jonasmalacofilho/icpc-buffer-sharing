@@ -11,7 +11,7 @@ fn run(input: impl BufRead, mut output: impl Write) {
     let mut input = input.lines();
 
     let mut params = Params::from_lines(&mut input);
-    params.tune(10);
+    params.tune(20);
 
     debug_assert!(
         params
@@ -378,6 +378,7 @@ impl Params {
 
     fn tune(&mut self, magic: usize) {
         let q = self.buffer_size_q;
+        let psum: usize = self.priorities_lt.iter().map(|p| *p as usize).sum();
         for ((prio, dbsize), qsizes) in self
             .priorities_lt
             .iter()
@@ -385,7 +386,7 @@ impl Params {
             .zip(&mut self.buffer_sizes_qt)
         {
             let (mut qmin, qbase, qmax) = qsizes.to_owned();
-            let magic_size = magic * (*prio as usize) * q / 1000;
+            let magic_size = magic * (*prio as usize) * q / psum / 100;
             qmin = qmin.max(magic_size.min(*dbsize).min(qmax));
             *qsizes = (qmin, qbase, qmax);
         }
