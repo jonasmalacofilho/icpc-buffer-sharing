@@ -25,6 +25,6 @@ ICPC 2023 Online Spring Challenge powered by Huawei.
 | 5b1e4e89bde7 | 202496657 |   7571 pt | try 1000 qbase/qcur brackets |
 | 6fc5f1a1a205 | 203135317 |       N/A | 9 runtime errors; 5 nil points |
 | c70b3a760658 | 203378938 |   9202 pt | ARC |
-| e59ccd0128ba | 203380111 |   9244 pt | ARC + qmin tuning to prio × 10% |
-|(e59ccd0128ba)| 203380128 |   9206 pt | ARC + qmin tuning to prio × 5% |
-|(e59ccd0128ba)| 203380416 |   9173 pt | ARC + qmin tuning to prio × 15% |
+| e59ccd0128ba | 203380111 |   9244 pt | ARC + qmin tuning to prio ÷ 10 × 10% |
+|(e59ccd0128ba)| 203380128 |   9206 pt | ARC + qmin tuning to prio ÷ 10 × 5% |
+|(e59ccd0128ba)| 203380416 |   9173 pt | ARC + qmin tuning to prio ÷ 10 × 15% |
