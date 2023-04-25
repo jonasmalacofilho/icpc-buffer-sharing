@@ -89,27 +89,6 @@ struct Buffer {
     params: Params,
 }
 
-#[derive(Debug, Clone, Copy, Eq)]
-struct HeapEntry(Page, u64);
-
-impl PartialEq for HeapEntry {
-    fn eq(&self, other: &Self) -> bool {
-        self.1 == other.1
-    }
-}
-
-impl Ord for HeapEntry {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.1.cmp(&self.1)
-    }
-}
-
-impl PartialOrd for HeapEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 impl Buffer {
     pub fn with_params(params: Params) -> Self {
         Buffer {
