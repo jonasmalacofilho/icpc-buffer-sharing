@@ -28,3 +28,6 @@ ICPC 2023 Online Spring Challenge powered by Huawei.
 | e59ccd0128ba | 203380111 |   9244 pt | ARC + qmin tuning to prio ÷ 10 × 10% |
 |(e59ccd0128ba)| 203380128 |   9206 pt | ARC + qmin tuning to prio ÷ 10 × 5% |
 |(e59ccd0128ba)| 203380416 |   9173 pt | ARC + qmin tuning to prio ÷ 10 × 15% |
+| 7f50e2096e05 | 203381995 |   9215 pt | ARC + qmin tuning to prio ÷ total_prio × 20% |
+| 22c0b4c2aeb7 | 203382418 |   9152 pt | ARC + prioritize tenants bellow qbase |
+| dc9b8bcb1185 | 203382608 |   9171 pt | ARC + qmin tuning + prioritize <qbase |
