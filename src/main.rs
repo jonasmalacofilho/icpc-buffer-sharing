@@ -2,9 +2,12 @@
 
 use std::collections::{BinaryHeap, HashMap};
 use std::io::{self, BufRead, Lines, Write};
+use std::time::Instant;
 
 fn main() {
+    let instant = Instant::now();
     run(io::stdin().lock(), io::stdout().lock());
+    eprintln!("execution took {:.1?}", Instant::elapsed(&instant));
 }
 
 fn run(input: impl BufRead, mut output: impl Write) {
