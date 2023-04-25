@@ -11,7 +11,7 @@ fn run(input: impl BufRead, mut output: impl Write) {
     let mut input = input.lines();
 
     let mut params = Params::from_lines(&mut input);
-    params.tune(20);
+    // params.tune(20);
 
     debug_assert!(
         params
