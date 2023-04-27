@@ -14,7 +14,8 @@ ICPC 2023 Online Spring Challenge powered by Huawei.[^1][^2]
 | [`c70b3a760658`] | [203378938] |  9202.4 pt | N×ARC |
 | [`e59ccd0128ba`] | [203380111] |  9244.0 pt | N×ARC + Qmin tuning to prio ÷ 10 × 10% |
 | [`5b141230745c`] | [203383211] | 10152.0 pt | `cf30f1620020` (N×LRU) + Qmin tuning (10%) |
-| **[`bc015f26b40b`]** | **[203631590]** | **10151.8 pt** | **N×LRU + donate from Q < Qbase then LRU** |
+| [`aa09bec94606`] | [203647749] |  5796.6 pt | N×LFU |
+| **[`bdbdfd50532b`]** | **[203649425]** | **10151.8 pt** | **Final: N×LRU + donate from Q < Qbase then LRU** |
 
 The full submission history can be seen in my [Codeforces submission history].
 
@@ -31,7 +32,8 @@ The full submission history can be seen in my [Codeforces submission history].
 [203378938]: https://codeforces.com/contest/1813/submission/203378938
 [203380111]: https://codeforces.com/contest/1813/submission/203380111
 [203383211]: https://codeforces.com/contest/1813/submission/203383211
-[203631590]: https://codeforces.com/contest/1813/submission/203631590
+[203647749]: https://codeforces.com/contest/1813/submission/202420355
+[203649425]: https://codeforces.com/contest/1813/submission/203649425
 
 [`717da76a3f8e`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/717da76a3f8e/src/main.rs
 [`e79c255e4631`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/e79c255e4631/src/main.rs
@@ -42,3 +44,4 @@ The full submission history can be seen in my [Codeforces submission history].
 [`e59ccd0128ba`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/e59ccd0128ba/src/main.rs
 [`5b141230745c`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/5b141230745c/src/main.rs
 [`bc015f26b40b`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/bc015f26b40b/src/main.rs
+[`aa09bec94606`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/aa09bec94606/src/main.rs
