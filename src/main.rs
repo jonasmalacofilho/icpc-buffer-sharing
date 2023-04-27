@@ -14,6 +14,16 @@ fn run(input: impl BufRead, mut output: impl Write) {
     let mut input = input.lines();
 
     let params = Params::from_lines(&mut input);
+
+    debug_assert!(
+        params
+            .buffer_sizes_qt
+            .iter()
+            .map(|(qmin, _, _)| qmin)
+            .sum::<usize>()
+            <= params.buffer_size_q
+    );
+
     let mut buffer = Buffer::with_params(params.clone());
 
     while let Some(op) = Operation::from_lines(&mut input) {
@@ -85,15 +95,6 @@ impl PartialOrd for HeapEntry {
 
 impl Buffer {
     fn with_params(params: Params) -> Self {
-        debug_assert!(
-            params
-                .buffer_sizes_qt
-                .iter()
-                .map(|(qmin, _, _)| qmin)
-                .sum::<usize>()
-                <= params.buffer_size_q
-        );
-
         Buffer {
             maps: vec![Default::default(); params.num_tenants_n],
             heaps: vec![Default::default(); params.num_tenants_n],
