@@ -14,7 +14,7 @@ ICPC 2023 Online Spring Challenge powered by Huawei.[^1][^2]
 | [`c70b3a760658`] | [203378938] |  9202.4 pt | N×ARC |
 | [`e59ccd0128ba`] | [203380111] |  9244.0 pt | N×ARC + Qmin tuning to prio ÷ 10 × 10% |
 | [`5b141230745c`] | [203383211] | 10152.0 pt | `cf30f1620020` (N×LRU) + Qmin tuning (10%) |
-| [`bc015f26b40b`] | [203631590] | 10151.8 pt | N×LRU + donate from Q < Qbase then LRU |
+| **[`bc015f26b40b`]** | **[203631590]** | **10151.8 pt** | **N×LRU + donate from Q < Qbase then LRU** |
 
 The full submission history can be seen in my [Codeforces submission history].
 
