@@ -179,7 +179,7 @@ impl Buffer {
                 if map.len() > *qbase {
                     (0, 0, used)
                 } else {
-                    (1, 0, used)
+                    (1, self.counters[*donor].preventable_misses, used)
                 }
             })
             .unwrap();
