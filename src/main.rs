@@ -1,8 +1,8 @@
-//! N×LRU with additional donor preference policy, in a very silly implementation.
+//! N×LFU with additional donor preference policy, in a very silly implementation.
 //!
 //! Copyright 2023 Jonas Malaco.
 
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap};
 use std::io::{self, BufRead, Lines, Write};
 use std::time::Instant;
 
@@ -103,17 +103,17 @@ struct Buffer {
 }
 
 #[derive(Debug, Clone, Copy, Eq)]
-struct HeapEntry(Page, u64);
+struct HeapEntry(Page, u64, u64);
 
 impl PartialEq for HeapEntry {
     fn eq(&self, other: &Self) -> bool {
-        self.1 == other.1
+        (self.1, self.2) == (other.1, other.2)
     }
 }
 
 impl Ord for HeapEntry {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.1.cmp(&self.1)
+        (other.1, other.2).cmp(&(self.1, self.2))
     }
 }
 
@@ -150,7 +150,10 @@ impl Buffer {
         if let Some((used, loc)) = self.directory[t].get_mut(&p) {
             let loc = *loc;
             self.counters[t].hits += 1;
-            self.all_time_seen[t].entry(p).and_modify(|c| *c += 1).or_insert(1);
+            self.all_time_seen[t]
+                .entry(p)
+                .and_modify(|c| *c += 1)
+                .or_insert(1);
             *used = self.now;
             self.check_invariants();
             return loc;
@@ -167,21 +170,30 @@ impl Buffer {
         if !at_capacity && self.len() < self.params.buffer_size_q {
             self.max_loc += 1;
             self.directory[t].insert(p, (self.now, self.max_loc));
-            let c = self.all_time_seen[t].entry(p).and_modify(|c| *c += 1).or_insert(1);
-            self.recently_seen[t].push(HeapEntry(p, *c));
+            let c = self.all_time_seen[t]
+                .entry(p)
+                .and_modify(|c| *c += 1)
+                .or_insert(1);
+            self.recently_seen[t].push(HeapEntry(p, *c, self.now));
             self.check_invariants();
             return self.max_loc;
         }
 
         // Reinsert any entries at the front of the heaps with outdated `used` values.
-        for (heap, seen) in self.recently_seen.iter_mut().zip(&self.all_time_seen) {
-            while let Some(&HeapEntry(p, c)) = heap.peek() {
+        for ((heap, seen), subdir) in self
+            .recently_seen
+            .iter_mut()
+            .zip(&self.all_time_seen)
+            .zip(&self.directory)
+        {
+            while let Some(&HeapEntry(p, c, used)) = heap.peek() {
                 let &latest_c = &seen[&p];
-                if c == latest_c {
+                let &latest_used = &subdir[&p].0;
+                if c == latest_c && used == latest_used {
                     break;
                 }
                 heap.pop();
-                heap.push(HeapEntry(p, latest_c));
+                heap.push(HeapEntry(p, latest_c, latest_used));
             }
         }
 
@@ -201,27 +213,26 @@ impl Buffer {
                     subdir.len() > *qmin
                 }
             })
-            .min_by_key(|(donor, (subdir, (_, qbase, _)))| {
-                let &HeapEntry(p, c) = self.recently_seen[*donor].peek().unwrap();
-                let &(used, _) = &self.directory[*donor][&p];
-                if subdir.len() > *qbase {
-                    (0, used)
-                } else {
-                    (1, used)
-                }
+            .min_by_key(|(donor, _)| {
+                let &HeapEntry(_, c, used) = self.recently_seen[*donor].peek().unwrap();
+                (c, used)
             })
             .unwrap();
 
         // Evict the worst page.
-        let HeapEntry(del, _) = self.recently_seen[donor].pop().unwrap();
-        let &(_, loc) = &self.directory[donor][&del];
+        let HeapEntry(del, _, del_used) = self.recently_seen[donor].pop().unwrap();
+        let &(last_used, loc) = &self.directory[donor][&del];
         self.directory[donor].remove(&del);
         self.counters[donor].evictions += 1;
+        debug_assert_eq!(del_used, last_used);
 
         // Store the new page.
         self.directory[t].insert(p, (self.now, loc));
-        let c = self.all_time_seen[t].entry(p).and_modify(|c| *c += 1).or_insert(1);
-        self.recently_seen[t].push(HeapEntry(p, *c));
+        let c = self.all_time_seen[t]
+            .entry(p)
+            .and_modify(|c| *c += 1)
+            .or_insert(1);
+        self.recently_seen[t].push(HeapEntry(p, *c, self.now));
         self.check_invariants();
         loc
     }
