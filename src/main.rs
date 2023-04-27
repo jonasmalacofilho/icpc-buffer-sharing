@@ -143,8 +143,7 @@ impl Buffer {
             self.counters[t].preventable_misses += 1;
         }
 
-        let at_capacity =
-            self.directory[t].len() == self.params.buffer_sizes_qt[t].2;
+        let at_capacity = self.directory[t].len() == self.params.buffer_sizes_qt[t].2;
 
         // Buffer and tenant not at capacity, insert op in empty space.
         if !at_capacity && self.len() < self.params.buffer_size_q {
@@ -193,7 +192,6 @@ impl Buffer {
                 }
             })
             .unwrap();
-
 
         // Evict the worst page.
         let HeapEntry(del, del_used) = self.recently_seen[donor].pop().unwrap();
