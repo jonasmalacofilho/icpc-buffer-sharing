@@ -4,6 +4,8 @@ use std::collections::{BinaryHeap, HashMap};
 use std::io::{self, BufRead, Lines, Write};
 use std::time::Instant;
 
+const TENANT_CAP: usize = 10;
+
 fn main() {
     let instant = Instant::now();
     run(io::stdin().lock(), io::stdout().lock());
@@ -65,9 +67,9 @@ fn run(input: impl BufRead, mut output: impl Write) {
 #[derive(Debug, Clone)]
 struct Buffer {
     params: Params,
-    maps: Vec<HashMap<Page, (u64, usize)>>,
-    heaps: Vec<BinaryHeap<HeapEntry>>,
-    counters: Vec<Counters>,
+    maps: [HashMap<Page, (u64, usize)>; TENANT_CAP],
+    heaps: [BinaryHeap<HeapEntry>; TENANT_CAP],
+    counters: [Counters; TENANT_CAP],
     max_loc: usize,
     now: u64,
 }
@@ -96,9 +98,9 @@ impl PartialOrd for HeapEntry {
 impl Buffer {
     fn with_params(params: Params) -> Self {
         Buffer {
-            maps: vec![Default::default(); params.num_tenants_n],
-            heaps: vec![Default::default(); params.num_tenants_n],
-            counters: vec![Default::default(); params.num_tenants_n],
+            maps: std::array::from_fn(|_| Default::default()),
+            heaps: std::array::from_fn(|_| Default::default()),
+            counters: std::array::from_fn(|_| Default::default()),
             max_loc: 0,
             now: 0,
             params,
