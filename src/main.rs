@@ -1,6 +1,6 @@
 //! Copyright 2023 Jonas Malaco.
 
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::io::{self, BufRead, Lines, Write};
 use std::time::Instant;
 
@@ -67,8 +67,9 @@ fn run(input: impl BufRead, mut output: impl Write) {
 #[derive(Debug, Clone)]
 struct Buffer {
     params: Params,
-    maps: [HashMap<Page, (u64, usize)>; TENANT_CAP],
-    heaps: [BinaryHeap<HeapEntry>; TENANT_CAP],
+    directory: [HashMap<Page, (u64, usize)>; TENANT_CAP],
+    recently_seen: [BinaryHeap<HeapEntry>; TENANT_CAP],
+    all_time_seen: [HashSet<Page>; TENANT_CAP],
     counters: [Counters; TENANT_CAP],
     max_loc: usize,
     now: u64,
@@ -98,8 +99,9 @@ impl PartialOrd for HeapEntry {
 impl Buffer {
     fn with_params(params: Params) -> Self {
         Buffer {
-            maps: std::array::from_fn(|_| Default::default()),
-            heaps: std::array::from_fn(|_| Default::default()),
+            directory: std::array::from_fn(|_| Default::default()),
+            recently_seen: std::array::from_fn(|_| Default::default()),
+            all_time_seen: std::array::from_fn(|_| Default::default()),
             counters: std::array::from_fn(|_| Default::default()),
             max_loc: 0,
             now: 0,
@@ -115,7 +117,7 @@ impl Buffer {
         self.now += 1;
 
         // Op already in the buffer, return its location.
-        if let Some((used, loc)) = self.maps[op.tenant.index()].get_mut(&op.page) {
+        if let Some((used, loc)) = self.directory[op.tenant.index()].get_mut(&op.page) {
             self.counters[op.tenant.index()].hits += 1;
             *used = self.now;
             let loc = *loc;
@@ -124,21 +126,25 @@ impl Buffer {
         }
 
         self.counters[op.tenant.index()].misses += 1;
+        if self.all_time_seen[op.tenant.index()].contains(&op.page) {
+            self.counters[op.tenant.index()].preventable_misses += 1;
+        }
 
         let at_capacity =
-            self.maps[op.tenant.index()].len() == self.params.buffer_sizes_qt[op.tenant.index()].2;
+            self.directory[op.tenant.index()].len() == self.params.buffer_sizes_qt[op.tenant.index()].2;
 
         // Buffer and tenant not at capacity, insert op in empty space.
         if !at_capacity && self.len() < self.params.buffer_size_q {
             self.max_loc += 1;
-            self.maps[op.tenant.index()].insert(op.page, (self.now, self.max_loc));
-            self.heaps[op.tenant.index()].push(HeapEntry(op.page, self.now));
+            self.directory[op.tenant.index()].insert(op.page, (self.now, self.max_loc));
+            self.recently_seen[op.tenant.index()].push(HeapEntry(op.page, self.now));
+            self.all_time_seen[op.tenant.index()].insert(op.page);
             self.check_invariants();
             return self.max_loc;
         }
 
         // Reinsert any entries at the front of the heaps with outdated `used` values.
-        for (heap, map) in self.heaps.iter_mut().zip(&self.maps) {
+        for (heap, map) in self.recently_seen.iter_mut().zip(&self.directory) {
             while let Some(&HeapEntry(p, used)) = heap.peek() {
                 let &(last_used, _) = &map[&p];
                 if used == last_used {
@@ -152,7 +158,7 @@ impl Buffer {
         // Contented, find the least worst page to swap with. If tenant is at capacity, it must
         // swap with one of its own pages.
         let (evict_owner, _) = self
-            .maps
+            .directory
             .iter()
             .zip(&self.params.buffer_sizes_qt)
             .enumerate()
@@ -166,33 +172,34 @@ impl Buffer {
                 }
             })
             .min_by_key(|(t, (map, (_, qbase, _)))| {
-                let &HeapEntry(_p, used) = self.heaps[*t].peek().unwrap();
+                let &HeapEntry(_p, used) = self.recently_seen[*t].peek().unwrap();
                 if map.len() > *qbase {
-                    (0, used)
+                    (0, 0, used)
                 } else {
-                    (1, used)
+                    (1, self.counters[*t].preventable_misses, used)
                 }
             })
             .unwrap();
-        let HeapEntry(evict_page, used) = self.heaps[evict_owner].pop().unwrap();
-        let &(last_used, loc) = &self.maps[evict_owner][&evict_page];
+        let HeapEntry(evict_page, used) = self.recently_seen[evict_owner].pop().unwrap();
+        let &(last_used, loc) = &self.directory[evict_owner][&evict_page];
         debug_assert_eq!(used, last_used);
-        self.maps[evict_owner].remove(&evict_page);
+        self.directory[evict_owner].remove(&evict_page);
         self.counters[evict_owner].evictions += 1;
-        self.maps[op.tenant.index()].insert(op.page, (self.now, loc));
-        self.heaps[op.tenant.index()].push(HeapEntry(op.page, self.now));
+        self.directory[op.tenant.index()].insert(op.page, (self.now, loc));
+        self.recently_seen[op.tenant.index()].push(HeapEntry(op.page, self.now));
+        self.all_time_seen[op.tenant.index()].insert(op.page);
         self.check_invariants();
         loc
     }
 
     #[cfg(debug_assertions)]
     fn check_invariants(&self) {
-        assert_eq!(self.max_loc, self.maps.iter().map(|x| x.len()).sum());
+        assert_eq!(self.max_loc, self.directory.iter().map(|x| x.len()).sum());
 
         assert!(self.len() <= self.params.buffer_size_q);
 
         for (t, (map, (_, _, qmax))) in self
-            .maps
+            .directory
             .iter()
             .zip(&self.params.buffer_sizes_qt)
             .enumerate()
@@ -201,7 +208,7 @@ impl Buffer {
             assert!(map.len() <= self.params.db_size_dt[t]);
         }
 
-        for (map, heap) in self.maps.iter().zip(&self.heaps) {
+        for (map, heap) in self.directory.iter().zip(&self.recently_seen) {
             assert_eq!(map.len(), heap.len());
         }
     }
@@ -302,6 +309,7 @@ struct Page(u32);
 struct Counters {
     pub hits: u32,
     pub misses: u32,
+    pub preventable_misses: u32,
     pub evictions: u32,
 }
 
