@@ -165,29 +165,34 @@ impl Buffer {
             .iter()
             .zip(&self.params.buffer_sizes_qt)
             .enumerate()
-            .filter(|(donor, (map, (qmin, _, _)))| {
+            .filter(|(donor, (subdir, (qmin, _, _)))| {
                 if at_capacity {
                     *donor == t
                 } else if *donor == t {
-                    map.len() >= *qmin
+                    subdir.len() >= *qmin
                 } else {
-                    map.len() > *qmin
+                    subdir.len() > *qmin
                 }
             })
-            .min_by_key(|(donor, (map, (_, qbase, _)))| {
+            .min_by_key(|(donor, (subdir, (_, qbase, _)))| {
                 let &HeapEntry(_p, used) = self.recently_seen[*donor].peek().unwrap();
-                if map.len() > *qbase {
+                if subdir.len() > *qbase {
                     (0, 0, used)
                 } else {
                     (1, self.counters[*donor].preventable_misses, used)
                 }
             })
             .unwrap();
+
+
+        // Evict the worst page.
         let HeapEntry(del, del_used) = self.recently_seen[donor].pop().unwrap();
         let &(last_used, loc) = &self.directory[donor][&del];
-        debug_assert_eq!(del_used, last_used);
         self.directory[donor].remove(&del);
         self.counters[donor].evictions += 1;
+        debug_assert_eq!(del_used, last_used);
+
+        // Store the new page.
         self.directory[t].insert(p, (self.now, loc));
         self.recently_seen[t].push(HeapEntry(p, self.now));
         self.all_time_seen[t].insert(p);
