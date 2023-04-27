@@ -151,7 +151,7 @@ fn foo() {}
 
 #[test]
 fn smoke() {
-    let inp = include_bytes!("../input.txt").as_slice();
+    let inp = include_bytes!("../data/input.txt").as_slice();
     let mut out = vec![];
     run(inp, &mut out);
     assert_eq!(out.lines().count(), 10);
