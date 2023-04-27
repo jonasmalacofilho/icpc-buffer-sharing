@@ -114,31 +114,34 @@ impl Buffer {
     }
 
     fn locate(&mut self, op: Operation) -> usize {
+        let t = op.tenant.index();
+        let p = op.page;
+
         self.now += 1;
 
         // Op already in the buffer, return its location.
-        if let Some((used, loc)) = self.directory[op.tenant.index()].get_mut(&op.page) {
-            self.counters[op.tenant.index()].hits += 1;
+        if let Some((used, loc)) = self.directory[t].get_mut(&p) {
+            self.counters[t].hits += 1;
             *used = self.now;
             let loc = *loc;
             self.check_invariants();
             return loc;
         }
 
-        self.counters[op.tenant.index()].misses += 1;
-        if self.all_time_seen[op.tenant.index()].contains(&op.page) {
-            self.counters[op.tenant.index()].preventable_misses += 1;
+        self.counters[t].misses += 1;
+        if self.all_time_seen[t].contains(&p) {
+            self.counters[t].preventable_misses += 1;
         }
 
         let at_capacity =
-            self.directory[op.tenant.index()].len() == self.params.buffer_sizes_qt[op.tenant.index()].2;
+            self.directory[t].len() == self.params.buffer_sizes_qt[t].2;
 
         // Buffer and tenant not at capacity, insert op in empty space.
         if !at_capacity && self.len() < self.params.buffer_size_q {
             self.max_loc += 1;
-            self.directory[op.tenant.index()].insert(op.page, (self.now, self.max_loc));
-            self.recently_seen[op.tenant.index()].push(HeapEntry(op.page, self.now));
-            self.all_time_seen[op.tenant.index()].insert(op.page);
+            self.directory[t].insert(p, (self.now, self.max_loc));
+            self.recently_seen[t].push(HeapEntry(p, self.now));
+            self.all_time_seen[t].insert(p);
             self.check_invariants();
             return self.max_loc;
         }
@@ -157,37 +160,37 @@ impl Buffer {
 
         // Contented, find the least worst page to swap with. If tenant is at capacity, it must
         // swap with one of its own pages.
-        let (evict_owner, _) = self
+        let (donor, _) = self
             .directory
             .iter()
             .zip(&self.params.buffer_sizes_qt)
             .enumerate()
-            .filter(|(t, (map, (qmin, _, _)))| {
+            .filter(|(donor, (map, (qmin, _, _)))| {
                 if at_capacity {
-                    *t == op.tenant.index()
-                } else if *t == op.tenant.index() {
+                    *donor == t
+                } else if *donor == t {
                     map.len() >= *qmin
                 } else {
                     map.len() > *qmin
                 }
             })
-            .min_by_key(|(t, (map, (_, qbase, _)))| {
-                let &HeapEntry(_p, used) = self.recently_seen[*t].peek().unwrap();
+            .min_by_key(|(donor, (map, (_, qbase, _)))| {
+                let &HeapEntry(_p, used) = self.recently_seen[*donor].peek().unwrap();
                 if map.len() > *qbase {
                     (0, 0, used)
                 } else {
-                    (1, self.counters[*t].preventable_misses, used)
+                    (1, self.counters[*donor].preventable_misses, used)
                 }
             })
             .unwrap();
-        let HeapEntry(evict_page, used) = self.recently_seen[evict_owner].pop().unwrap();
-        let &(last_used, loc) = &self.directory[evict_owner][&evict_page];
-        debug_assert_eq!(used, last_used);
-        self.directory[evict_owner].remove(&evict_page);
-        self.counters[evict_owner].evictions += 1;
-        self.directory[op.tenant.index()].insert(op.page, (self.now, loc));
-        self.recently_seen[op.tenant.index()].push(HeapEntry(op.page, self.now));
-        self.all_time_seen[op.tenant.index()].insert(op.page);
+        let HeapEntry(del, del_used) = self.recently_seen[donor].pop().unwrap();
+        let &(last_used, loc) = &self.directory[donor][&del];
+        debug_assert_eq!(del_used, last_used);
+        self.directory[donor].remove(&del);
+        self.counters[donor].evictions += 1;
+        self.directory[t].insert(p, (self.now, loc));
+        self.recently_seen[t].push(HeapEntry(p, self.now));
+        self.all_time_seen[t].insert(p);
         self.check_invariants();
         loc
     }
