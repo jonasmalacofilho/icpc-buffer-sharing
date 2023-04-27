@@ -43,6 +43,70 @@ fn tenant_at_qmax() {
 }
 
 #[test]
+fn arc_tenant_at_qmax_fully_in_t1() {
+    let params = Params {
+        num_tenants_n: 2,
+        buffer_size_q: 10,
+        priorities_lt: vec![1; 2],
+        db_size_dt: vec![10; 2],
+        buffer_sizes_qt: vec![(1, 1, 1); 2],
+    };
+    let mut buffer = Buffer::with_params(params);
+    let a = buffer.locate(op(1, 1));
+
+    // Increase `p`.
+    buffer.locate(op(2, 1));
+    buffer.locate(op(2, 1));
+    buffer.locate(op(2, 1));
+
+    assert_eq!(buffer.locate(op(1, 2)), a);
+    assert_eq!(buffer.len(), 2);
+}
+
+#[test]
+fn arc_tenant_at_qmax_fully_in_t2() {
+    let params = Params {
+        num_tenants_n: 2,
+        buffer_size_q: 10,
+        priorities_lt: vec![1; 2],
+        db_size_dt: vec![10; 2],
+        buffer_sizes_qt: vec![(1, 1, 1); 2],
+    };
+    let mut buffer = Buffer::with_params(params);
+    let a = buffer.locate(op(1, 1));
+
+    // Move `op(1, 1)` to T2.
+    buffer.locate(op(1, 1));
+
+    // Decrease `p`.
+    buffer.locate(op(2, 1));
+    buffer.locate(op(2, 2));
+    buffer.locate(op(2, 3));
+
+    assert_eq!(buffer.locate(op(1, 2)), a);
+    assert_eq!(buffer.len(), 2);
+}
+
+#[test]
+fn arc_tenant_at_qmax_hit_in_b1() {
+    let params = Params {
+        num_tenants_n: 1,
+        buffer_size_q: 10,
+        priorities_lt: vec![1; 1],
+        db_size_dt: vec![10; 1],
+        buffer_sizes_qt: vec![(1, 1, 1); 1],
+    };
+    let mut buffer = Buffer::with_params(params);
+    let a = buffer.locate(op(1, 1));
+
+    // Move `op(1, 1)` to B1.
+    buffer.locate(op(1, 2));
+
+    assert_eq!(buffer.locate(op(1, 1)), a);
+    assert_eq!(buffer.len(), 1);
+}
+
+#[test]
 fn buffer_and_tenant_bellow_capacity() {
     let params = Params {
         num_tenants_n: 1,
