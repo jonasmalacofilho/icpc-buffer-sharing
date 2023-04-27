@@ -43,5 +43,5 @@ The full submission history can be seen in my [Codeforces submission history].
 [`c70b3a760658`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/c70b3a760658/src/main.rs
 [`e59ccd0128ba`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/e59ccd0128ba/src/main.rs
 [`5b141230745c`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/5b141230745c/src/main.rs
-[`bc015f26b40b`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/bc015f26b40b/src/main.rs
 [`aa09bec94606`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/aa09bec94606/src/main.rs
+[`bdbdfd50532b`]: https://github.com/jonasmalacofilho/icpc-buffer-sharing/blob/bdbdfd50532b/src/main.rs
