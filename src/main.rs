@@ -1,3 +1,5 @@
+//! N×LRU with additional donor preference policy, in a very silly implementation.
+//!
 //! Copyright 2023 Jonas Malaco.
 
 use std::collections::{BinaryHeap, HashMap, HashSet};
