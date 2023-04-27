@@ -203,9 +203,9 @@ impl Buffer {
             .min_by_key(|(donor, (subdir, (_, qbase, _)))| {
                 let &HeapEntry(_p, used) = self.recently_seen[*donor].peek().unwrap();
                 if subdir.len() > *qbase {
-                    (0, 0, used)
+                    (0, used)
                 } else {
-                    (1, self.counters[*donor].hits + self.counters[*donor].misses, used)
+                    (1, used)
                 }
             })
             .unwrap();
