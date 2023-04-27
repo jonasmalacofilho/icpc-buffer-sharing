@@ -168,7 +168,7 @@ impl Buffer {
                 if map.len() > *qbase {
                     (0, used)
                 } else {
-                    (1000 * *qbase / map.len(), used)
+                    (1, used)
                 }
             })
             .unwrap();
