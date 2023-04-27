@@ -96,7 +96,7 @@ struct Buffer {
     params: Params,
     directory: [HashMap<Page, (u64, usize)>; TENANT_CAP],
     recently_seen: [BinaryHeap<HeapEntry>; TENANT_CAP],
-    all_time_seen: [HashSet<Page>; TENANT_CAP],
+    all_time_seen: [HashMap<Page, u64>; TENANT_CAP],
     counters: [Counters; TENANT_CAP],
     max_loc: usize,
     now: u64,
@@ -148,15 +148,16 @@ impl Buffer {
 
         // Op already in the buffer, return its location.
         if let Some((used, loc)) = self.directory[t].get_mut(&p) {
-            self.counters[t].hits += 1;
-            *used = self.now;
             let loc = *loc;
+            self.counters[t].hits += 1;
+            self.all_time_seen[t].entry(p).and_modify(|c| *c += 1).or_insert(1);
+            *used = self.now;
             self.check_invariants();
             return loc;
         }
 
         self.counters[t].misses += 1;
-        if self.all_time_seen[t].contains(&p) {
+        if self.all_time_seen[t].contains_key(&p) {
             self.counters[t].preventable_misses += 1;
         }
 
@@ -166,21 +167,21 @@ impl Buffer {
         if !at_capacity && self.len() < self.params.buffer_size_q {
             self.max_loc += 1;
             self.directory[t].insert(p, (self.now, self.max_loc));
-            self.recently_seen[t].push(HeapEntry(p, self.now));
-            self.all_time_seen[t].insert(p);
+            let c = self.all_time_seen[t].entry(p).and_modify(|c| *c += 1).or_insert(1);
+            self.recently_seen[t].push(HeapEntry(p, *c));
             self.check_invariants();
             return self.max_loc;
         }
 
         // Reinsert any entries at the front of the heaps with outdated `used` values.
-        for (heap, map) in self.recently_seen.iter_mut().zip(&self.directory) {
-            while let Some(&HeapEntry(p, used)) = heap.peek() {
-                let &(last_used, _) = &map[&p];
-                if used == last_used {
+        for (heap, seen) in self.recently_seen.iter_mut().zip(&self.all_time_seen) {
+            while let Some(&HeapEntry(p, c)) = heap.peek() {
+                let &latest_c = &seen[&p];
+                if c == latest_c {
                     break;
                 }
                 heap.pop();
-                heap.push(HeapEntry(p, last_used));
+                heap.push(HeapEntry(p, latest_c));
             }
         }
 
@@ -201,26 +202,27 @@ impl Buffer {
                 }
             })
             .min_by_key(|(donor, (subdir, (_, qbase, _)))| {
-                let &HeapEntry(_p, used) = self.recently_seen[*donor].peek().unwrap();
-                if subdir.len() > *qbase {
-                    (0, used)
-                } else {
-                    (1, used)
-                }
+                let &HeapEntry(p, c) = self.recently_seen[*donor].peek().unwrap();
+                // let &(used, _) = &self.directory[*donor][&p];
+                // if subdir.len() > *qbase {
+                //     (0, used)
+                // } else {
+                //     (1, used)
+                // }
+                c
             })
             .unwrap();
 
         // Evict the worst page.
-        let HeapEntry(del, del_used) = self.recently_seen[donor].pop().unwrap();
-        let &(last_used, loc) = &self.directory[donor][&del];
+        let HeapEntry(del, _) = self.recently_seen[donor].pop().unwrap();
+        let &(_, loc) = &self.directory[donor][&del];
         self.directory[donor].remove(&del);
         self.counters[donor].evictions += 1;
-        debug_assert_eq!(del_used, last_used);
 
         // Store the new page.
         self.directory[t].insert(p, (self.now, loc));
-        self.recently_seen[t].push(HeapEntry(p, self.now));
-        self.all_time_seen[t].insert(p);
+        let c = self.all_time_seen[t].entry(p).and_modify(|c| *c += 1).or_insert(1);
+        self.recently_seen[t].push(HeapEntry(p, *c));
         self.check_invariants();
         loc
     }
