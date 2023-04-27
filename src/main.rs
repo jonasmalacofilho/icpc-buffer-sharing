@@ -1,4 +1,4 @@
-//! N×LFU with additional donor preference policy, in a very silly implementation.
+//! N×LFU, in a very silly implementation.
 //!
 //! Copyright 2023 Jonas Malaco.
 
