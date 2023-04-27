@@ -149,6 +149,7 @@ impl Buffer {
             self.counters[t].hits += 1;
             *used = self.now;
             let loc = *loc;
+            self.counters[t].crp = self.counters[t].crp.saturating_sub(1).max(self.params.buffer_sizes_qt[t].0);
             self.check_invariants();
             return loc;
         }
@@ -156,6 +157,7 @@ impl Buffer {
         self.counters[t].misses += 1;
         if self.all_time_seen[t].contains(&p) {
             self.counters[t].preventable_misses += 1;
+            self.counters[t].crp = (self.counters[t].crp + 1).min(self.params.buffer_sizes_qt[t].1);
         }
 
         let at_capacity = self.directory[t].len() == self.params.buffer_sizes_qt[t].2;
@@ -203,7 +205,7 @@ impl Buffer {
                 if subdir.len() > *qbase {
                     (0, 0, used)
                 } else {
-                    (1, self.counters[*donor].preventable_misses, used)
+                    (1, self.counters[*donor].hits + self.counters[*donor].misses, used)
                 }
             })
             .unwrap();
@@ -342,6 +344,8 @@ struct Counters {
     pub misses: u32,
     pub preventable_misses: u32,
     pub evictions: u32,
+
+    pub crp: usize,
 }
 
 #[cfg(test)]
