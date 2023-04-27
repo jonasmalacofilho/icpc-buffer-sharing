@@ -44,9 +44,17 @@ fn run(input: impl BufRead, mut output: impl Write) {
     let mut misses = 0;
     let mut preventable_misses = 0;
 
-    for (t, c) in buffer.counters.iter().enumerate() {
+    for (t, c) in buffer
+        .counters
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.hits + c.misses > 0)
+    {
         eprintln!(
-            "tenant {:>2}: {:>7} /{:>3.0}% hits, {:>7} evictions, {:>7} /{:>3.0}% misses, {:>7} /{:>3.0}% preventable misses",
+            "tenant {:>2}: {:>7} /{:>3.0}% hits, \
+                    {:>7} evictions, \
+                    {:>7} /{:>3.0}% misses, \
+                    {:>7} /{:>3.0}% preventable misses",
             t + 1,
             c.hits,
             100. * c.hits as f32 / (c.hits as f32 + c.misses as f32),
@@ -56,14 +64,21 @@ fn run(input: impl BufRead, mut output: impl Write) {
             c.preventable_misses,
             100. * c.preventable_misses as f32 / (c.hits as f32 + c.misses as f32),
         );
+
         hits += c.hits;
         evictions += c.evictions;
         misses += c.misses;
         preventable_misses += c.preventable_misses;
+
+        debug_assert!(c.misses == 0 || c.preventable_misses < c.misses);
+        debug_assert!(c.preventable_misses <= c.evictions);
     }
 
     eprintln!(
-        "    total: {:>7} /{:>3.0}% hits, {:>7} evictions, {:>7} /{:>3.0}% misses, {:>7} /{:>3.0}% preventable misses",
+        "    total: {:>7} /{:>3.0}% hits, \
+                    {:>7} evictions, \
+                    {:>7} /{:>3.0}% misses, \
+                    {:>7} /{:>3.0}% preventable misses",
         hits,
         100. * hits as f32 / (hits as f32 + misses as f32),
         evictions,
