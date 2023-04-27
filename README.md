@@ -21,7 +21,7 @@ ICPC 2023 Online Spring Challenge powered by Huawei.
 | 8dc352a698b0 | 202443198 |  10152 pt | (check that we're deterministic) |
 | c2d348a0b12a | 202444079 |   7241 pt | try 1000 hit rate brackets |
 | 76929737dd38 | 202444509 |   9871 pt | try 2 hit rate brackets |
-| 4988a140319e | 202495737 |(10152) pt | prioritize tenants bellow/at qbase |
+| 4988a140319e | 202495737 | 10152- pt | prioritize tenants bellow/at qbase |
 | 5b1e4e89bde7 | 202496657 |   7571 pt | try 1000 qbase/qcur brackets |
 | 6fc5f1a1a205 | 203135317 |       N/A | 9 runtime errors; 5 nil points |
 | c70b3a760658 | 203378938 |   9202 pt | ARC |
@@ -31,4 +31,5 @@ ICPC 2023 Online Spring Challenge powered by Huawei.
 | 7f50e2096e05 | 203381995 |   9215 pt | ARC + qmin tuning to prio ÷ total_prio × 20% |
 | 22c0b4c2aeb7 | 203382418 |   9152 pt | ARC + prioritize tenants bellow qbase |
 | dc9b8bcb1185 | 203382608 |   9171 pt | ARC + qmin tuning + prioritize <qbase |
-| 5b141230745c | 203383211 |(10152) pt | LRU + qmin tuning (10%) |
+| 5b141230745c | 203383211 | 10152- pt | LRU + qmin tuning (10%) |
+| bc015f26b40b | 203631590 |  10152 pt | N×LRU, donate from q < qbase then min(used) |
